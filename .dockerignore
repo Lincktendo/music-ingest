@@ -1,0 +1,16 @@
+**
+!Dockerfile
+!requirements.txt
+!app.py
+!core.py
+!accounts.py
+!account_routes.py
+!integrations.py
+!automation.py
+!storage.py
+!static/
+!static/**
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!tools/
+!tools/image_inventory.py

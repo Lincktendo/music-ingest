@@ -1,0 +1,32 @@
+services:
+  music-ingest:
+    image: ghcr.io/lincktendo/music-ingest:0.4.0-beta.1
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8511}:8511"
+    environment:
+      DATA_DIR: /data
+      MUSIC_DIR: /music
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-localhost,127.0.0.1}"
+    volumes:
+      - data:/data
+      - music:/music
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+volumes:
+  data:
+  music:

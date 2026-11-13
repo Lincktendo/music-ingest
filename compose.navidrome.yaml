@@ -1,0 +1,40 @@
+# Optional standalone example for a new, shared household music library.
+# Never mount the Music Ingest data volume in Navidrome: only share music.
+services:
+  init-navidrome-data:
+    image: ghcr.io/lincktendo/music-ingest:0.4.0-beta.1
+    platform: linux/amd64
+    user: "0:0"
+    entrypoint: ["python", "-c"]
+    command: ['import os; os.chown("/navidrome-data", 10001, 10001)']
+    volumes:
+      - navidrome-data:/navidrome-data
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+  navidrome:
+    image: navidrome/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52
+    user: "10001:10001"
+    depends_on:
+      init-navidrome-data:
+        condition: service_completed_successfully
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${NAVIDROME_PORT:-4533}:4533"
+    environment:
+      ND_MUSICFOLDER: /music
+      ND_DATAFOLDER: /data
+      ND_SCANNER_SCHEDULE: "@every 1m"
+      ND_ENABLEINSIGHTSCOLLECTOR: "false"
+    volumes:
+      - navidrome-data:/data
+      - music:/music:ro
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+volumes:
+  navidrome-data:
