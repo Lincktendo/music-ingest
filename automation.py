@@ -245,18 +245,29 @@ class Following:
             if len(active)>=10:return
             rows=db.execute('SELECT a.* FROM auto_tracks a WHERE job_id IS NULL AND EXISTS(SELECT 1 FROM follow_tracks t JOIN follows f ON f.id=t.follow_id WHERE t.track_id=a.track_id AND f.enabled=1) ORDER BY added_at,track_id LIMIT 25').fetchall()
             if not rows:return
-            busy={t['id']:j['id'] for j in active for t in json.loads(j['payload'])['tracks'] if json.loads(j['payload'])['format']=='mp3'}
-            batch=[]
+            busy = {}
+            for job in active:
+                payload = json.loads(job['payload'])
+                for track in payload['tracks']:
+                    busy[track['id'], track.get('output_format', payload['format'])] = job['id']
             for item in rows:
-                existing=db.execute("SELECT * FROM files WHERE source_id=? AND format='mp3'",(item['track_id'],)).fetchone()
-                job=busy.get(item['track_id']) or (existing['job_id'] if existing and store.public_file(existing) else None)
-                if job:db.execute('UPDATE auto_tracks SET job_id=? WHERE track_id=?',(job,item['track_id']))
-                else:batch.append(json.loads(item['payload']))
-            if batch:
-                for track in batch[:10-len(active)]:
-                    ident=uuid.uuid4().hex
-                    db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?)',(ident,'queued',json.dumps({'tracks':[track],'format':'mp3'},ensure_ascii=False),0,'',time.time()))
-                    db.execute('UPDATE auto_tracks SET job_id=? WHERE track_id=?',(ident,track['id']))
+                try:
+                    track = store.sources.plan([json.loads(item['payload'])], 'auto')[0]
+                except UserError:
+                    continue
+                fmt = track['output_format']
+                key = (track['id'], fmt)
+                existing = db.execute('SELECT * FROM files WHERE source_id=? AND format=?', key).fetchone()
+                job = busy.get(key) or (existing['job_id'] if existing and store.public_file(existing) else None)
+                if not job:
+                    if len(active) >= 10:
+                        continue
+                    job = uuid.uuid4().hex
+                    data = json.dumps({'tracks': [track], 'format': fmt}, ensure_ascii=False)
+                    db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?)', (job, 'queued', data, 0, '', time.time()))
+                    active.append(job)
+                    busy[key] = job
+                db.execute('UPDATE auto_tracks SET job_id=? WHERE track_id=?', (job, item['track_id']))
         store.event.set()
 
     def tick(self):

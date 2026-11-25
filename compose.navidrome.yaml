@@ -1,8 +1,11 @@
 # Optional standalone example for a new, shared household music library.
 # Never mount the Music Ingest data volume in Navidrome: only share music.
 services:
+  music-ingest:
+    environment:
+      NAVIDROME_URL: http://navidrome:4533
   init-navidrome-data:
-    image: ghcr.io/lincktendo/music-ingest:0.4.0-beta.1
+    image: ghcr.io/lincktendo/music-ingest:0.11.0
     platform: linux/amd64
     user: "0:0"
     entrypoint: ["python", "-c"]

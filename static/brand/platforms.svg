@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="yt-music" viewBox="0 0 32 32">
+    <circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="2.5"/>
+    <path fill="currentColor" fill-rule="evenodd" d="M16 6.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19Zm-2.8 4.8v9.4l8-4.7Z"/>
+  </symbol>
+  <symbol id="qobuz" viewBox="0 0 32 32">
+    <path fill="currentColor" fill-rule="evenodd" d="M15.1 3a12 12 0 1 1 0 24 12 12 0 0 1 0-24Zm0 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Zm-8 .9a1 1 0 0 0 1.9.5 6.5 6.5 0 0 1 4.9-4.3 1 1 0 1 0-.4-2 8.4 8.4 0 0 0-6.4 5.8Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" d="m20.3 22.4 6 5.3"/>
+  </symbol>
+  <symbol id="soundcloud" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M13.7 8.6a8 8 0 0 1 12.7 5.8 4.7 4.7 0 1 1-.7 9.3H14.9a1.2 1.2 0 0 1-1.2-1.2Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" d="M2.8 17.1v3.7m3.5-7.4v9.1m3.7-11.3v11.5"/>
+  </symbol>
+  <symbol id="vimeo" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M2.4 12.3c3.1-3 6.2-5.2 8.3-5.2 2.8 0 3.7 2.8 4.4 7.2.5 3.3 1.2 6.1 2.3 6.1 1.4 0 4.6-4.7 4.6-7.2 0-1.8-1.7-2.3-4-1.5 1.2-3.8 4.3-6.5 7.8-6.5 2.4 0 3.8 1.7 3.5 4.7-.4 4.6-8.4 16.8-13.7 16.8-3.1 0-4.4-3.3-5.6-7.7l-1.7-5.6c-.5-1.4-1.2-2-2.1-1.7-.6.2-1.4.7-2.2 1.4Z"/>
+  </symbol>
+  <symbol id="bandcamp" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M2 23.9 12.1 8.1H30L19.9 23.9Z"/>
+  </symbol>
+  <symbol id="dailymotion" viewBox="0 0 32 32">
+    <path fill="currentColor" fill-rule="evenodd" d="m22 4.7 5.9-1.4-2.3 23.1h-5.7l.2-2a8.7 8.7 0 0 1-5.9 2.4c-5.5 0-9.1-4-8.5-9.3.6-5.3 4.7-9.2 10-9.2 2.4 0 4.2.8 5.6 2.3Zm-6 8.7a4.7 4.7 0 1 0-.7 9.3 4.7 4.7 0 0 0 .7-9.3Z"/>
+  </symbol>
+  <symbol id="mixcloud" viewBox="0 0 32 32">
+    <g fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.6 23.8a5.9 5.9 0 1 1-.7-11.8 7.1 7.1 0 0 1 13.2 1.7 5.1 5.1 0 0 1-1.5 10.1Z"/>
+      <path d="M24.9 10.6a10.4 10.4 0 0 1 1.6 3.9m.6-7.6a15 15 0 0 1 3.1 7"/>
+    </g>
+  </symbol>
+  <symbol id="internet-archive" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M2.8 9.3 16 3.5l13.2 5.8V11H2.8Zm2.5 15.1h21.4v2.1H5.3ZM2.7 28h26.6v2H2.7Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="2.9" d="M7.3 12.8v10m5.8-10v10m5.8-10v10m5.8-10v10"/>
+  </symbol>
+  <symbol id="website" viewBox="0 0 32 32">
+    <g fill="none" stroke="currentColor" stroke-width="2.1">
+      <circle cx="16" cy="16" r="12"/><ellipse cx="16" cy="16" rx="5.6" ry="12"/>
+      <path d="M4 16h24"/>
+    </g>
+  </symbol>
+</svg>

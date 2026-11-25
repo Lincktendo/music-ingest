@@ -1,4 +1,5 @@
 """Small account/library API; all permission checks are server-side."""
+from audio_formats import AudioFormat, DownloadMode
 from typing import Literal
 
 from fastapi import APIRouter, Request, Response
@@ -29,12 +30,13 @@ class KeyName(BaseModel):
 
 
 class Choice(BaseModel):
-    id: str = Field(min_length=11, max_length=11)
+    id: str = Field(pattern=r'^(?:[A-Za-z0-9_-]{11}|qb:[0-9]{1,16}|ex:[a-f0-9]{32})$')
+    expected_format: AudioFormat | None = None
 
 
 class Selection(BaseModel):
     tracks: list[Choice] = Field(min_length=1, max_length=50)
-    format: Literal['mp3', 'original'] = 'mp3'
+    format: DownloadMode = 'auto'
 
 
 def install_account_routes(app, accounts, registry, catalog, integrations=None):
@@ -132,8 +134,9 @@ def install_account_routes(app, accounts, registry, catalog, integrations=None):
     @router.post('/api/proposals', status_code=201)
     def submit(body: Selection, request: Request, library: str | None = None):
         actor, lib = access(request, library, allow_key=True)
-        tracks = catalog.selected([x.id for x in body.tracks])
-        return propose(registry.get(lib['id']), lib, actor, tracks, body.format)
+        store = registry.get(lib['id'])
+        tracks = store.sources.selection(body.tracks, body.format)
+        return propose(store, lib, actor, tracks, body.format)
 
     @router.get('/api/proposals')
     def list_proposals(request: Request, library: str | None = None):

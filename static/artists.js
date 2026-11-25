@@ -48,9 +48,12 @@ const Artists={
       }
       if(artist.description){const about=el('details','artist-about');about.append(el('summary','','Sobre el artista'),el('p','',artist.description));panel.append(about);}
       const songs=Array.isArray(artist.songs)?artist.songs:[],albums=Array.isArray(artist.albums)?artist.albums:[];
-      if(songs.length){panel.append(el('h3','artist-section-title','Canciones destacadas'));const list=el('div','artist-songs');
-        for(const song of songs){const button=el('button','artist-song');button.type='button';const text=el('div','row-info');text.append(el('strong','',song.title||'Sin título'),el('small','',song.artist||artist.title));button.append(cover(song.cover||artist.cover),text,el('span','song-length',duration(song.duration)),el('span','song-action','Revisar'));button.addEventListener('click',()=>openPreview({id:song.id,type:'song'}));list.append(window.Selection?Selection.wrap(button,song):button);}panel.append(list);}
-      if(albums.length){panel.append(el('h3','artist-section-title','Álbumes'));const grid=el('div','results-grid');for(const album of albums){const card=el('button','music-card');card.type='button';card.append(cover(album.cover),el('h3','',album.title||'Álbum'),el('p','',album.artist||artist.title||''));card.addEventListener('click',()=>openPreview({id:album.id,type:'album'}));grid.append(card);}panel.append(grid);}
+      if(songs.length){panel.append(el('h3','artist-section-title','Canciones destacadas'));const list=el('div','record-grid');
+        for(const song of songs)list.append(RecordCards.card({...song,artists:song.artists?.length?song.artists:[{id:artist.id,name:artist.title}]}));
+        panel.append(list);}
+      if(albums.length){panel.append(el('h3','artist-section-title','Álbumes'));const grid=el('div','record-grid');
+        for(const album of albums)grid.append(RecordCards.card({...album,artists:[{id:artist.id,name:artist.title}]}));
+        panel.append(grid);}
       if(!songs.length&&!albums.length)panel.append(el('p','section-copy','No hay pistas o álbumes disponibles para este artista. Probá buscar una canción por su nombre.'));
     }catch(err){if(request===this.request&&revision===Profile.revision){feedback.textContent=err.message;feedback.classList.add('error');}}
   }

@@ -1,0 +1,19 @@
+#download-progress{margin-top:18px;padding:14px;background:#141d29;border:1px solid #334354;border-radius:12px}
+#download-progress progress{width:100%;accent-color:#89b8e7;display:block;margin:8px 0 12px}
+#review-progress-actions{display:flex;flex-wrap:wrap;gap:7px}
+#review-buttons{gap:8px;flex-wrap:wrap}#review-buttons #selected-count{margin-right:auto}
+#failed-section{margin:2rem 0}#failed-section .danger-action{margin-left:8px}
+#download-notices{position:fixed;left:16px;bottom:18px;z-index:20;display:grid;gap:6px;width:min(355px,calc(100vw - 32px));pointer-events:none}
+.download-notice{background:#19222d;border:1px solid #58718b;border-radius:12px;display:flex;padding:8px;box-shadow:0 8px 24px #0008;pointer-events:auto;align-items:start}
+.notice-open{border:0;background:transparent;color:inherit;display:flex;gap:10px;padding:0;text-align:left;align-items:center;flex:1;min-width:0}
+.notice-open .cover{width:48px;height:48px;flex:none}.notice-text{display:grid;min-width:0}
+.notice-text span,.notice-text small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.notice-text small{color:var(--muted)}
+#metadata-dialog{width:min(420px,92vw)}#tag-form{display:grid;gap:10px;margin-top:10px}#tag-form label{display:grid;gap:2px}
+#tag-form input{padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text);width:100%}
+#tag-image .cover{width:86px;height:86px}.review-art-edit,#player-info-action{display:grid;place-items:center;border:1px solid #617487;border-radius:50%;background:#111b29;color:white;position:absolute;padding:0}
+#preview-cover{position:relative}.review-art-edit{width:27px;height:27px;bottom:3px;right:3px;cursor:pointer}
+.player-art-wrap{position:relative;flex:none}#player-info-action{width:19px;height:19px;right:-3px;bottom:-2px;font:bold 12px Georgia,serif;box-shadow:0 1px 6px #0007}
+.player-download-wrap{display:inline-flex;align-items:center;justify-content:center}
+#player-download{display:grid;place-items:center;width:34px;height:34px;padding:5px;background:transparent;border:1px solid var(--line);border-radius:9px;color:var(--text)}
+#player-download.downloaded{background:#153729;border-color:#2d674a;color:#8df0b5;opacity:1;pointer-events:none}
+@media(max-width:1000px){#download-notices{bottom:calc(110px + env(safe-area-inset-bottom))}body.has-player #download-notices{bottom:calc(240px + env(safe-area-inset-bottom))}}

@@ -1,12 +1,12 @@
 # Integraciones y acceso para IA
 
-Esta guía describe Music Ingest 0.4.0-beta.1. Todos los ejemplos usan valores ficticios. No pegues tus claves reales en documentación ni en reportes de errores.
+Esta guía explica cómo usa Music Ingest los proveedores de letras y géneros y qué puede hacer una herramienta con una clave de IA. Los ejemplos usan valores ficticios.
 
 ## Configuración por biblioteca
 
-Solo el propietario puede abrir y cambiar los proveedores de su biblioteca en Perfil. Las demás bibliotecas tienen ajustes independientes. Los campos de contraseña aparecen vacíos aunque ya exista una clave: dejarlos vacíos conserva la clave guardada; marcar «Eliminar la clave guardada» la borra.
+Solo el propietario puede abrir y cambiar los proveedores de su biblioteca en Ajustes → Usuarios avanzados. Las demás bibliotecas tienen ajustes independientes. Los campos de contraseña aparecen vacíos aunque ya exista una clave: dejarlos vacíos conserva la clave guardada; marcar «Eliminar la clave guardada» la borra.
 
-La respuesta de configuración solo indica si existe una clave, nunca devuelve su contenido. Las claves de proveedores se guardan en el volumen persistente `data`, en archivos separados por biblioteca con permisos `0600` en Linux. No están cifradas en reposo. No se importan claves de otras aplicaciones ni cookies del navegador.
+La configuración indica si guardaste una clave. Music Ingest guarda las claves de los proveedores en archivos privados de cada biblioteca dentro del volumen persistente `data`, con permisos `0600` en Linux y sin cifrado en reposo. Si querés conectar una fuente con tus cookies, subí vos el archivo desde su tarjeta en Inicio.
 
 Cuando una integración está activa, se envían al proveedor los datos necesarios de la canción, como título, artista, álbum y duración. No se envían las cuentas de Music Ingest ni los archivos de audio. Las respuestas se guardan temporalmente en memoria para reducir consultas.
 
@@ -18,7 +18,7 @@ Para una clave opcional:
 
 1. Abrí el [portal de desarrolladores de LRCLIB](https://lrclib.net/developers).
 2. Registrá una aplicación de servidor siguiendo sus instrucciones.
-3. Si obtenés una API key de servidor, pegala en el campo opcional de Perfil y guardá.
+3. Si obtenés una API key de servidor, pegala en **Ajustes → Usuarios avanzados → Letras y géneros** y guardá.
 
 La aplicación usa el encabezado de clave del servidor cuando está configurado. También identifica la aplicación con User-Agent y respeta las respuestas de espera del proveedor. Consultá la [documentación oficial](https://lrclib.net/docs) para sus requisitos vigentes.
 
@@ -35,7 +35,7 @@ Está desactivado inicialmente. Necesita una API key propia; no necesita Shared 
 1. Iniciá sesión o creá una cuenta en Last.fm.
 2. Abrí [Crear una API key](https://www.last.fm/api/account/create) y completá el registro de tu aplicación.
 3. Copiá únicamente el campo **API key**, de 32 caracteres hexadecimales. Podés revisar tus aplicaciones en [API accounts](https://www.last.fm/api/accounts).
-4. En Perfil, pegá la clave, activá Last.fm y guardá.
+4. En **Ajustes → Usuarios avanzados → Letras y géneros**, pegá la clave, activá Last.fm y guardá.
 
 Se consulta [track.getTopTags](https://www.last.fm/api/show/track.getTopTags). Se verifica la identidad de la pista y se conserva solo una lista limitada de etiquetas reconocidas como géneros, descartando categorías como favoritos o «seen live». Esto reduce ruido, pero puede omitir géneros poco comunes; no garantiza cobertura completa.
 
@@ -53,7 +53,7 @@ La biblioteca indica si la letra es sincronizada, normal, instrumental, no encon
 
 ## Clave de Music Ingest para una IA
 
-Esta clave es distinta de las claves de LRCLIB o Last.fm. Se crea en Perfil → Acceso para IA, se muestra una sola vez y queda vinculada a una biblioteca. Al revocarla deja de permitir nuevas peticiones. No la entregues a una herramienta que no quieras autorizar.
+Esta clave es distinta de las claves de LRCLIB o Last.fm. Se crea en Ajustes → Usuarios avanzados → Tu IA, se muestra una sola vez y queda vinculada a una biblioteca. Al revocarla deja de permitir nuevas peticiones. No la entregues a una herramienta que no quieras autorizar.
 
 | Acción con clave de IA | Permitida |
 | --- | --- |
@@ -91,10 +91,12 @@ POST BASE_URL/api/proposals
 Authorization: Bearer YOUR_MUSIC_INGEST_KEY
 Content-Type: application/json
 
-{"tracks":[{"id":"TRACK_ID_11"}],"format":"mp3"}
+{"tracks":[{"id":"TRACK_ID_11"}],"format":"auto"}
 ```
 
-`format` acepta `mp3` u `original`. `TRACK_ID_11` es un marcador: reemplazalo por el identificador real de 11 caracteres. La respuesta indica `pending` o `approved`, según la aprobación automática de la biblioteca.
+Reemplazá `TRACK_ID_11` por el identificador exacto que devolvió la previsualización. YouTube usa IDs de 11 caracteres, Qobuz usa el prefijo `qb:` y las pistas de otras fuentes pueden llevar `ex:`. Cada propuesta admite entre 1 y 50 pistas distintas. La respuesta indica `pending` o `approved`, según la configuración de la biblioteca.
+
+Usá `"format":"auto"` u omití `format` para aplicar la preferencia de calidad de la biblioteca. Si necesitás un formato concreto, elegí uno que la previsualización ofrezca para **todas** las pistas del envío. Los valores posibles son `mp3`, `flac`, `wav`, `alac`, `aac`, `opus`, `ogg` y `aiff`. El valor heredado `original` pide el mejor formato habilitado. Para comprobar que una selección conserva el formato que se mostró al usuario, podés enviar `expected_format` en cada pista junto con su `id`.
 
 ```http
 GET BASE_URL/api/proposals

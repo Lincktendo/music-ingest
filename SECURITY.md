@@ -2,12 +2,14 @@
 
 ## Alcance
 
-Music Ingest 0.4.0-beta.1 está pensado para una computadora propia o una red privada de confianza. La autenticación y el aislamiento de bibliotecas no convierten esta beta en un servicio listo para Internet abierto. El Compose predeterminado publica el puerto solamente en `127.0.0.1`.
+Music Ingest está pensado para una computadora propia o una red privada de confianza. La autenticación y el aislamiento de bibliotecas no convierten esta beta en un servicio listo para Internet abierto. El Compose predeterminado publica el puerto solamente en `127.0.0.1`.
 
 El registro está abierto a quienes puedan acceder a la instancia. Creá tu cuenta antes de compartir acceso y no abras puertos del router directamente hacia la aplicación. No montes el socket de Docker, la raíz del host, carpetas de claves ni archivos de otras aplicaciones dentro del contenedor.
 
 ## Qué guarda y qué comparte
 
+- La importación de cookies y enlaces privados de compras está limitada al propietario en localhost. Importá archivos de tu propia cuenta y del sitio elegido. El servidor cifra estos datos con AES-GCM y una clave local de cada biblioteca. Un administrador con acceso al volumen completo puede leer esa clave, así que protegé el servidor y sus respaldos.
+- El HTML de Inicio se interpreta como texto. La biblioteca conserva los títulos, identificadores y enlaces públicos de catálogo reconocidos, descarta el HTML y nunca lo publica como página. Las claves de colaboración no permiten ver o modificar sesiones.
 - El volumen `data` contiene cuentas, hashes de contraseñas y claves de acceso, sesiones, cola, ajustes e historial de automatizaciones.
 - Las claves opcionales de proveedores se almacenan por biblioteca en archivos con permisos `0600` en Linux. **No están cifradas en reposo.** Protegé el volumen y los respaldos.
 - Las búsquedas y consultas de metadatos contactan servicios externos. Estos reciben los datos necesarios de la consulta y pueden ver la IP de salida de tu servidor. Consultá [INTEGRATIONS.md](INTEGRATIONS.md).
@@ -23,3 +25,5 @@ Para una vulnerabilidad, usá [Report a vulnerability](https://github.com/Linckt
 Incluí versión, comportamiento esperado, pasos mínimos con datos ficticios y el impacto. **No adjuntes** `.env`, bases de datos, cookies, tokens, volúmenes, respaldos ni registros completos sin revisarlos. Ocultá nombres, direcciones y claves de las capturas. Para problemas normales de uso, abrí un [issue](https://github.com/Lincktendo/music-ingest/issues).
 
 No se promete un tiempo de respuesta ni ausencia de vulnerabilidades. Las correcciones de esta beta se publicarán en una nueva versión; no hay soporte indefinido de versiones antiguas.
+
+El actualizador usa las versiones estables del proyecto oficial yt-dlp. Verifica con gpgv la firma de la lista de hashes usando su clave pública incluida, comprueba el SHA-256 del ejecutable y prueba su versión antes de activarlo. Conserva el motor incluido y la versión anterior para recuperarse de un fallo. Las descargas de componentes se guardan por separado en /data/extractor-updates, fuera de /music. La consulta pública de versiones no usa cookies de las cuentas conectadas.

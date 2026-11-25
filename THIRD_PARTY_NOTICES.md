@@ -10,6 +10,7 @@ Las versiones corresponden a `requirements.txt`. Los enlaces apuntan al código 
 | --- | --- | --- | --- |
 | FastAPI | 0.162.5 | MIT | [FastAPI](https://github.com/fastapi/fastapi), [LICENSE](https://github.com/fastapi/fastapi/blob/master/LICENSE) |
 | Uvicorn | 0.54.0 | BSD-3-Clause | [Uvicorn](https://github.com/Kludex/uvicorn), [LICENSE.md](https://github.com/Kludex/uvicorn/blob/main/LICENSE.md) |
+| PyCryptodome (pycryptodomex) | 3.24.2 | BSD-2-Clause y componentes de dominio público | [Proyecto y licencia](https://github.com/Legrandin/pycryptodome/blob/master/LICENSE.rst) |
 | ytmusicapi | 1.12.3 | MIT | [ytmusicapi](https://github.com/sigma67/ytmusicapi), [LICENSE](https://github.com/sigma67/ytmusicapi/blob/main/LICENSE) |
 | yt-dlp, extras `default` | 2026.10.26 | Unlicense para el paquete Python; dependencias con licencias propias | [yt-dlp](https://github.com/yt-dlp/yt-dlp), [licencias de distribución](https://github.com/yt-dlp/yt-dlp#licensing) |
 | Mutagen | 1.48.1 | GPL-2.0-or-later | [Mutagen](https://github.com/quodlibet/mutagen), [COPYING](https://github.com/quodlibet/mutagen/blob/main/COPYING), [declaración GPL v2 o posterior](https://github.com/quodlibet/mutagen/blob/main/pyproject.toml) |
@@ -34,3 +35,13 @@ El ejemplo opcional de Navidrome usa su imagen oficial como servicio separado. [
 YouTube Music, LRCLIB, MusicBrainz, Last.fm y DuckDuckGo son servicios externos, no componentes incluidos con credenciales en esta distribución. Sus condiciones y los derechos sobre audio, letras, imágenes y metadatos son independientes de la licencia del programa. La aplicación conserva atribuciones cuando el proveedor las entrega. No se incluyen bibliotecas musicales ni carátulas de demostración.
 
 Los nombres de productos y marcas pertenecen a sus titulares; se usan para identificar compatibilidad, sin indicar afiliación ni respaldo.
+
+La versión incluida de yt-dlp sirve como respaldo del motor actualizable. En ejecución se usa la distribución oficial Unix yt-dlp y su [manifiesto firmado de publicación](https://github.com/yt-dlp/yt-dlp/releases). La [clave pública de verificación](https://github.com/yt-dlp/yt-dlp/blob/2026.10.26/public.key) se incluye en la imagen. La versión efectiva figura en Ajustes → Usuarios avanzados.
+
+## Nombres gráficos de las fuentes
+
+Las marcas identifican el servicio al que pertenece cada tarjeta. Los nombres gráficos monocromáticos proceden de los logotipos de sus titulares. Se conservan localmente para que la interfaz pueda mostrarlos sin contactar esos sitios.
+
+- [YouTube Music](https://commons.wikimedia.org/wiki/File:YouTube_Music_full_logo.svg), [Qobuz](https://commons.wikimedia.org/wiki/File:Qobuz_logo_light.svg) y [SoundCloud](https://worldvectorlogo.com/logo/soundcloud-1).
+- [Bandcamp](https://commons.wikimedia.org/wiki/File:Bandcamp-logotype-color.svg), [Vimeo](https://commons.wikimedia.org/wiki/File:Vimeo_Logo.svg) y [Dailymotion](https://commons.wikimedia.org/wiki/File:Dailymotion_logo_2023.svg).
+- [Mixcloud](https://www.mixcloud.com/assets/mix-DxEKPrwH-mc-logo-default.svg) e [Internet Archive](https://commons.wikimedia.org/wiki/File:Internet_Archive_logo_and_wordmark_(horizontal).svg).

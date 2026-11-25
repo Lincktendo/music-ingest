@@ -135,6 +135,21 @@ class LibraryAPI(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(audio.exists());self.assertEqual((await self.owner.get(item['url'])).status_code,404)
         self.assertEqual((await self.owner.get('/api/library')).json()['items'],[])
 
+    async def test_failed_attempt_can_be_dismissed_while_its_saved_file_still_plays(self):
+        register_file(self.store)
+        payload = json.dumps({'tracks':[TRACK], 'format':'mp3'})
+        with self.store.db() as db:
+            db.execute("UPDATE files SET job_id='failed'")
+            for status in ('failed','completed'):
+                db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?)',(status,status,payload,0,'',0))
+        await self.owner.post(f'/api/libraries/{self.lid}/members', json={'username':'friend'})
+        response = await self.friend.request('DELETE','/api/jobs/failed',params={'library':self.lid},json={})
+        self.assertEqual(response.status_code,403)
+        self.assertEqual((await self.owner.request('DELETE','/api/jobs/failed',json={})).status_code,200)
+        self.assertEqual((await self.owner.request('DELETE','/api/jobs/completed',json={})).status_code,400)
+        item=(await self.owner.get('/api/library/record/'+TRACK['id'])).json()['file']
+        self.assertEqual((await self.owner.get(item['url'])).status_code,200)
+
     async def test_library_pagination_bounds(self):
         for query in ({'limit':501},{'limit':0},{'offset':-1}):
             self.assertEqual((await self.owner.get('/api/library',params=query)).status_code,422)

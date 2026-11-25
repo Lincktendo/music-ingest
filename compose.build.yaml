@@ -1,0 +1,7 @@
+# Build this checkout for either installation option.
+services:
+  music-ingest:
+    build:
+      context: .
+    image: music-ingest:local
+    pull_policy: build

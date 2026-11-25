@@ -1,0 +1,7 @@
+.sidebar .brand-icon{position:relative;width:52px;height:56px;flex:0 0 52px;overflow:visible}
+.sidebar .brand-icon img{filter:none!important;box-shadow:none}
+.sidebar .brand-icon canvas{display:none;width:52px;height:56px;cursor:grab;touch-action:none;user-select:none;filter:none;outline-offset:2px}
+.sidebar .brand-icon.is-3d canvas{display:block}
+.sidebar .brand-icon canvas.is-dragging{cursor:grabbing}
+.sidebar .brand-icon.is-3d>img{display:none}
+.sidebar .brand-icon canvas:focus-visible{outline:2px solid var(--accent);border-radius:8px}

@@ -1,0 +1,10 @@
+.rotation-card form{display:grid;gap:14px;margin-top:10px}
+.rotation-interval{display:flex;gap:10px;align-items:end}
+.rotation-interval label{display:grid;gap:4px;max-width:130px}
+.rotation-card input:not([type=checkbox]),.rotation-card select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#151a20}
+#rotation-connection{padding:12px;border:1px solid var(--line);border-radius:9px}
+#rotation-connection>label{display:grid;gap:4px;margin-top:10px}
+#rotation-connection>button{margin-top:12px}
+#rotation-credential{color:var(--muted)}
+.rotation-card summary{cursor:pointer}
+.rotation-card .toggle-line span{min-width:0}

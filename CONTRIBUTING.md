@@ -18,6 +18,14 @@ python -m pip install httpx
 python -m unittest discover -s tests -v
 ```
 
+Para probar el reproductor y la cola de Auto DJ, ejecutá desde la raíz del repositorio con Node.js 22 o posterior:
+
+```sh
+node --test tests/auto-dj.test.cjs
+```
+
+Estas pruebas usan el ejecutor incluido en Node.js. La aplicación en Docker puede usarse sin instalar Node.js en tu computadora.
+
 Para construir una imagen local:
 
 ```sh

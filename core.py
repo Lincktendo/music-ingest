@@ -30,8 +30,10 @@ from storage import music_path
 VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}\Z")
 ALBUM_ID = re.compile(r"MPREb[A-Za-z0-9_-]{5,150}\Z")
 ARTIST_ID = re.compile(r"UC[A-Za-z0-9_-]{20,100}\Z")
-COVER_HOSTS = {'i.ytimg.com', 'img.youtube.com', 'yt3.googleusercontent.com', 'lh3.googleusercontent.com', 'yt3.ggpht.com'}
-MEDIA_EXTS = {'.mp3', '.m4a', '.opus', '.ogg', '.flac'}
+COVER_HOSTS = {'static.qobuz.com', 'static2.qobuz.com','i1.sndcdn.com','f4.bcbits.com','i.ytimg.com', 'img.youtube.com', 'yt3.googleusercontent.com', 'lh3.googleusercontent.com', 'yt3.ggpht.com'}
+from audio_formats import ORDER, native_audio, track_formats
+
+MEDIA_EXTS = {'.wav', '.aiff', '.mp3', '.m4a', '.opus', '.ogg', '.flac'}
 
 
 class UserError(ValueError):
@@ -57,7 +59,9 @@ def parse_link(value):
         raise UserError('Usá un enlace HTTPS de YouTube o YouTube Music.')
     if u.hostname == 'youtu.be':
         ident = u.path.strip('/')
-    elif u.hostname in ('youtube.com', 'www.youtube.com', 'music.youtube.com') and u.path == '/watch':
+    elif u.hostname in ('youtube.com','www.youtube.com','m.youtube.com') and re.fullmatch(r'/(shorts|embed)/[A-Za-z0-9_-]{11}/?',u.path):
+        ident=u.path.strip('/').split('/')[-1]
+    elif u.hostname in ('youtube.com', 'www.youtube.com', 'm.youtube.com','music.youtube.com') and u.path == '/watch':
         ident = parse_qs(u.query).get('v', [''])[0]
     else:
         raise UserError('Pegá el enlace de una canción. Para álbumes, usá la búsqueda.')
@@ -197,6 +201,8 @@ class Catalog:
     def normalize(self, row):
         kind = row.get('resultType') or 'song'
         ident = row.get('videoId') if kind == 'song' else row.get('browseId')
+        if kind=='song' and row.get('videoType') not in (None,'','MUSIC_VIDEO_TYPE_ATV'):
+            return None
         pattern = {'song': VIDEO_ID, 'album': ALBUM_ID, 'artist': ARTIST_ID}.get(kind)
         if not pattern or not pattern.fullmatch(ident or ''):
             return None
@@ -204,7 +210,10 @@ class Catalog:
             title = bounded_text(row.get('artist') or row.get('title'))
             return {'id': ident, 'type': kind, 'title': title, 'artist': title, 'album': '', 'cover': self.cover(row.get('thumbnails')), 'duration': ''}
         album = row.get('album') if isinstance(row.get('album'), dict) else {}
-        return {'id': ident, 'type': kind, 'title': bounded_text(row.get('title')), 'artist': self.artists(row.get('artists')), 'album': bounded_text(album.get('name')), 'cover': self.cover(row.get('thumbnails')), 'duration': bounded_text(row.get('duration'), 20)}
+        artists = [{'name': bounded_text(a['name'],120), 'id': a.get('id') if ARTIST_ID.fullmatch(a.get('id') or '') else ''}
+                   for a in row.get('artists') or [] if isinstance(a,dict) and a.get('name')]
+        return {'id': ident, 'type': kind, 'artists': artists, 'album_id': album.get('id') or '',
+                'video_type': row.get('videoType') or '', 'title': bounded_text(row.get('title')), 'artist': self.artists(row.get('artists')), 'album': bounded_text(album.get('name')), 'cover': self.cover(row.get('thumbnails')), 'duration': bounded_text(row.get('duration'), 20)}
 
     def search(self, query, kind):
         rows = self.factory().search(query, filter=kind, limit=20)
@@ -269,14 +278,27 @@ class Catalog:
             artist = self.artists(album.get('artists'))
             cover = self.cover(album.get('thumbnails'))
             tracks = []
-            for i, row in enumerate(album.get('tracks') or [], 1):
+            album_rows=album.get('tracks') or []
+            alternatives={}
+            if album.get('audioPlaylistId') and any(r.get('videoType')!='MUSIC_VIDEO_TYPE_ATV' for r in album_rows):
+                try:
+                    entries=api.get_playlist(album['audioPlaylistId'],limit=100).get('tracks',[])
+                except Exception:
+                    entries=[]
+                for audio_row in entries:
+                    if audio_row.get('videoType')=='MUSIC_VIDEO_TYPE_ATV' and audio_row.get('isAvailable') is not False:
+                        alternatives.setdefault(bounded_text(audio_row.get('title')).casefold(),[]).append(audio_row)
+            for i, row in enumerate(album_rows,1):
+                choices=alternatives.get(bounded_text(row.get('title')).casefold(),[])
+                if row.get('videoType')!='MUSIC_VIDEO_TYPE_ATV' and len(choices)==1:
+                    row={**row,**choices[0]}
                 tid = row.get('videoId') or ''
-                if not VIDEO_ID.fullmatch(tid) or row.get('isAvailable') is False:
+                if not VIDEO_ID.fullmatch(tid) or row.get('isAvailable') is False or row.get('videoType') not in (None,'','MUSIC_VIDEO_TYPE_ATV'):
                     warnings.append('Una pista del álbum no está disponible.')
                     continue
                 if any(t['id'] == tid for t in tracks):
                     continue
-                tracks.append({'id': tid, 'title': bounded_text(row.get('title')), 'artist': self.artists(row.get('artists')) or artist, 'album': title, 'cover': cover, 'duration': bounded_text(row.get('duration'), 20), 'track': i})
+                tracks.append({'id': tid, 'album_id': ident, 'artists': row.get('artists') or album.get('artists') or [], 'title': bounded_text(row.get('title')), 'artist': self.artists(row.get('artists')) or artist, 'album': title, 'cover': cover, 'duration': bounded_text(row.get('duration'), 20), 'track': i})
             if len(tracks) > 50:
                 warnings.append('Esta prueba muestra las primeras 50 pistas del álbum.')
                 tracks = tracks[:50]
@@ -289,7 +311,11 @@ class Catalog:
             if int(raw.get('lengthSeconds') or 0) > 3600 or raw.get('isLiveContent'):
                 raise UserError('Esta versión admite canciones de hasta una hora, no transmisiones en vivo.')
             title, artist = bounded_text(raw.get('title')), bounded_text(raw.get('author'))
-            cover = self.cover((raw.get('thumbnail') or {}).get('thumbnails'))
+            with self.lock:
+                previous = self.cache.get(ident,(0,{}))[1]
+            video_cover = self.cover((raw.get('thumbnail') or {}).get('thumbnails'))
+            cover = video_cover
+            row = {}
             album_name = ''
             duration = str(raw.get('lengthSeconds') or '')
             try:
@@ -302,7 +328,11 @@ class Catalog:
                 duration = bounded_text(row.get('length'), 20) or duration
             except Exception:
                 warnings.append('Algunos datos del álbum no están disponibles; se conservarán los de la fuente.')
-            tracks = [{'id': ident, 'title': title, 'artist': artist, 'album': album_name, 'cover': cover, 'duration': duration, 'track': 1}]
+            if not album_name and previous.get('album'):
+                album_name = previous['album']
+            if previous.get('cover') and (not row or not row.get('thumbnail') and not row.get('thumbnails')):
+                cover = previous['cover']
+            tracks = [{'id': ident, 'video_cover': video_cover, 'artists': row.get('artists') or previous.get('artists',[]), 'album_id': (row.get('album') or {}).get('id') or previous.get('album_id',''), 'video_type': row.get('videoType') or raw.get('musicVideoType') or '', 'title': title, 'artist': artist, 'album': album_name, 'cover': cover, 'duration': duration, 'track': 1}]
         if not tracks:
             raise UserError('No hay canciones disponibles en esta selección.')
         self.remember(tracks)
@@ -319,8 +349,15 @@ def tag_file(path, track, cover):
     lyrics = bounded_text(track.get('lyrics'), 100000)
     synced = bounded_text(track.get('synced_lyrics'), 100000)
     genres = [bounded_text(x, 80) for x in (track.get('genres') or [])[:8] if isinstance(x, str) and x.strip()]
-    if path.suffix == '.mp3':
-        tags = ID3()
+    if path.suffix in ('.mp3', '.wav', '.aiff'):
+        container = None
+        if path.suffix == '.mp3':
+            tags = ID3()
+        else:
+            container = File(path)
+            if container.tags is None:
+                container.add_tags()
+            tags = container.tags
         for value in (TIT2(encoding=3, text=title), TPE1(encoding=3, text=artist), TALB(encoding=3, text=album), TRCK(encoding=3, text=number), TXXX(encoding=3, desc='Source ID', text=track['id'])):
             tags.add(value)
         if cover:
@@ -339,7 +376,10 @@ def tag_file(path, track, cover):
                     timed.append((text, (int(minute) * 60 + int(second)) * 1000 + int((fraction or '0').ljust(3, '0'))))
             if timed:
                 tags.add(SYLT(encoding=3, lang='und', format=2, type=1, desc='', text=sorted(timed, key=lambda x: x[1])))
-        tags.save(path, v2_version=3)
+        if container is None:
+            tags.save(path, v2_version=3)
+        else:
+            container.save()
     else:
         audio = File(path)
         if audio is None:
@@ -361,7 +401,11 @@ def tag_file(path, track, cover):
             audio.tags['title'], audio.tags['artist'], audio.tags['album'], audio.tags['tracknumber'] = [title], [artist], [album], [number]
             if cover:
                 picture = Picture(); picture.type = 3; picture.mime = 'image/jpeg'; picture.data = cover
-                audio.tags['metadata_block_picture'] = [base64.b64encode(picture.write()).decode()]
+                if path.suffix == '.flac':
+                    audio.clear_pictures()
+                    audio.add_picture(picture)
+                else:
+                    audio.tags['metadata_block_picture'] = [base64.b64encode(picture.write()).decode()]
             if genres:
                 audio.tags['genre'] = genres
             if lyrics:
@@ -373,12 +417,12 @@ def tag_file(path, track, cover):
 
 def classify_error(text):
     lower = text.lower()
+    if re.search(r'\b429\b', lower) or any(term in lower for term in ('too many requests','rate limit','rate-limit','quota exceeded','quotaexceeded')):
+        return 'Google/YouTube alcanzó su límite temporal de solicitudes (429). Esperá a que se restablezca y volvé a intentar. Podés escuchar tu música guardada mientras tanto.'
     if 'sign in' in lower or 'not a bot' in lower:
-        return 'La fuente pide iniciar sesión. Esta prueba no importa cookies ni cuentas; probá otra canción.'
+        return 'YouTube pide una sesión vigente. Conectá o renová tus cookies de YouTube Music en Inicio.'
     if '403' in lower:
         return 'La fuente rechazó la descarga (403). Probá más tarde o con otra canción.'
-    if '429' in lower:
-        return 'La fuente limitó las solicitudes. Esperá unos minutos antes de reintentar.'
     if 'private' in lower or 'unavailable' in lower or 'removed' in lower:
         return 'La canción no está disponible desde este servidor.'
     return 'No se pudo obtener el audio. No se agregó ningún archivo incompleto; podés reintentar.'
@@ -393,13 +437,21 @@ class Store:
         self.lock = threading.RLock()
         self.event, self.stop_event = threading.Event(), threading.Event()
         self.thread = None
+        self.auditions = {}
+        self.audition_errors = {}
         self.enricher = None
+        self.extractor = None
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS library_options(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, status TEXT, payload TEXT, progress REAL, error TEXT, created_at REAL)')
             db.execute('CREATE TABLE IF NOT EXISTS files(source_id TEXT, format TEXT, name TEXT, metadata TEXT, job_id TEXT, PRIMARY KEY(source_id,format))')
+            db.execute("CREATE INDEX IF NOT EXISTS files_youtube ON files(json_extract(metadata,'$.youtube_id'))")
+            db.execute('CREATE TABLE IF NOT EXISTS custom_art(id TEXT PRIMARY KEY, cover TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS managed_sidecars(name TEXT PRIMARY KEY)')
             db.execute("UPDATE jobs SET status='interrupted',error='El servidor se reinició. Podés reintentar las canciones pendientes.' WHERE status IN ('queued','running')")
+
+        from sources import Sources
+        self.sources = Sources(self)
 
     @contextmanager
     def db(self):
@@ -421,8 +473,9 @@ class Store:
             self.thread.join(timeout=12)
 
     def enqueue(self, tracks, fmt):
-        if fmt not in ('mp3', 'original'):
+        if fmt not in (*ORDER, 'auto', 'original'):
             raise UserError('Formato no válido.')
+        tracks = self.sources.plan(tracks, fmt) if not all(t.get('output_format') for t in tracks) else tracks
         payload = {'tracks': tracks, 'format': fmt}
         with self.lock, self.db() as db:
             if db.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0] >= 10:
@@ -481,7 +534,7 @@ class Store:
 
     def delete_file(self, source_id, fmt):
         """Remove only an app-registered audio and provably app-created sidecars."""
-        if not VIDEO_ID.fullmatch(source_id or '') or fmt not in ('mp3', 'original'):
+        if not (VIDEO_ID.fullmatch(source_id or '') or re.fullmatch(r'(?:qb:\d{1,16}|ex:[a-f0-9]{32})', source_id or '')) or fmt not in (*ORDER, 'original'):
             raise UserError('Canción no válida.')
         warning = ''
         with self.lock, self.db() as db:
@@ -491,7 +544,7 @@ class Store:
                 raise UserError('Esta canción ya no está en la biblioteca.')
             for job in db.execute("SELECT payload FROM jobs WHERE status IN ('queued','running')"):
                 payload = json.loads(job['payload'])
-                if payload['format'] == fmt and any(track['id'] == source_id for track in payload['tracks']):
+                if any(track['id'] == source_id and track.get('output_format', payload['format']) == fmt for track in payload['tracks']):
                     raise UserError('Esta canción todavía está en una descarga. Esperá a que termine para eliminarla.')
             try:
                 audio = music_path(self.music, row['name'])
@@ -526,7 +579,7 @@ class Store:
         with self.db() as db:
             jobs = db.execute('SELECT * FROM jobs ORDER BY created_at DESC LIMIT 100').fetchall()
             parsed = [(row, json.loads(row['payload'])) for row in jobs]
-            needed = list({(t['id'], payload['format']) for _, payload in parsed for t in payload['tracks']})
+            needed = list({(t['id'], t.get('output_format', payload['format'])) for _, payload in parsed for t in payload['tracks']})
             indexed = {}
             # Fetch only files referenced by visible jobs, and keep one small summary
             # per source/format. Never materialize all historic lyrics in memory.
@@ -539,14 +592,14 @@ class Store:
         for row, payload in parsed:
             files = []
             for track in payload['tracks']:
-                found = indexed.get((track['id'], payload['format']))
+                found = indexed.get((track['id'], track.get('output_format', payload['format'])))
                 if found:
                     files.append(found)
             title = payload['tracks'][0]['title']
             if len(payload['tracks']) > 1:
                 title += f" + {len(payload['tracks']) - 1} canciones"
             warnings = list(dict.fromkeys(f['warning'] for f in files if f.get('warning')))
-            result.append({k: row[k] for k in ('id', 'status', 'progress', 'error', 'created_at')} | {'title': title, 'files': files, 'total': len(payload['tracks']), 'warnings': warnings})
+            result.append({k: row[k] for k in ('id', 'status', 'progress', 'error', 'created_at')} | {'title': title, 'cover': payload['tracks'][0].get('cover',''), 'artist': payload['tracks'][0].get('artist',''), 'files': files, 'total': len(payload['tracks']), 'formats': list(dict.fromkeys(t.get('output_format', payload['format']) for t in payload['tracks'])), 'warnings': warnings})
         return {'items': result}
 
     def file_path(self, jobid, name):
@@ -564,6 +617,24 @@ class Store:
         if not path.is_file():
             raise UserError('Archivo no encontrado.')
         return path
+
+    def saved_ids(self, ids):
+        ids=list({i for i in ids if i})
+        saved=set()
+        with self.db() as db:
+            for start in range(0,len(ids),200):
+                keys=ids[start:start+200]
+                placeholders=','.join('?' for _ in keys)
+                rows=db.execute(f"SELECT source_id,name,json_extract(metadata,'$.youtube_id') AS other FROM files WHERE source_id IN ({placeholders}) OR json_extract(metadata,'$.youtube_id') IN ({placeholders})",keys+keys)
+                for row in rows:
+                    try:
+                        if music_path(self.music,row['name']).is_file():
+                            saved.add(row['source_id'])
+                            if row['other']:
+                                saved.add(row['other'])
+                    except (ValueError,OSError):
+                        continue
+        return saved
 
     def existing(self, track, fmt):
         with self.db() as db:
@@ -613,8 +684,9 @@ class Store:
             for index, track in enumerate(payload['tracks']):
                 if self.stop_event.is_set():
                     raise UserError('Descarga interrumpida; podés reintentarla.')
-                if not self.existing(track, payload['format']):
-                    self.download(ident, track, payload['format'], lambda p: self.update(ident, progress=(index + p / 100) * 100 / len(payload['tracks'])))
+                fmt = track.get('output_format', payload['format'])
+                if not self.existing(track, fmt):
+                    self.download(ident, track, fmt, lambda p: self.update(ident, progress=(index + p / 100) * 100 / len(payload['tracks'])))
                 self.update(ident, progress=(index + 1) * 100 / len(payload['tracks']))
             self.update(ident, status='completed', progress=100)
         except UserError as error:
@@ -628,7 +700,121 @@ class Store:
         folder = self.data / 'temp' / uuid.uuid4().hex
         folder.mkdir(parents=True)
         try:
-            command = [sys.executable, '-m', 'yt_dlp', '--ignore-config', '--no-cache-dir', '--no-playlist', '--newline', '--no-colors', '--socket-timeout', '20', '--retries', '1', '--fragment-retries', '1', '--max-filesize', '150M', '--match-filter', 'duration <= 3600 & !is_live', '--js-runtimes', 'deno', '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', '-x', '--audio-format', 'mp3' if fmt == 'mp3' else 'best', '--audio-quality', '0', '-o', str(folder / 'audio.%(ext)s'), 'https://www.youtube.com/watch?v=' + track['id']]
+            if track['id'].startswith('ex:'):
+                track = dict(track)
+                track['verified_native'] = self.sources.index.download(track,folder,fmt)
+            elif track.get('provider') == 'Qobuz' and track.get('native_format')=='MP3':
+                if fmt!='mp3':
+                    raise UserError('Qobuz ofrece esta pista en MP3.')
+                path=folder/'audio.mp3'
+                self.sources.purchases.download(track['id'],path,progress)
+                from mutagen.mp3 import MP3, HeaderNotFoundError
+                try:
+                    if not 0 < MP3(path).info.length <= 3610:
+                        raise UserError('La duración del MP3 no es válida.')
+                except HeaderNotFoundError:
+                    raise UserError('Qobuz no entregó un MP3 válido.') from None
+            elif track.get('provider') == 'Qobuz':
+                flac = folder / 'audio.flac'
+                self.sources.purchases.download(track['id'], flac, progress)
+                from mutagen.flac import FLAC, FLACNoHeaderError
+                try:
+                    original = FLAC(flac)
+                except (FLACNoHeaderError, OSError, ValueError):
+                    raise UserError('Qobuz no entregó un archivo FLAC válido.') from None
+                if not 0 < original.info.length <= 3610:
+                    raise UserError('La duración de esta pista FLAC no es válida.')
+                track = {**track, 'bit_depth': original.info.bits_per_sample, 'sample_rate': original.info.sample_rate}
+                # Decode-check integrity first; conversion is only possible towards MP3.
+                output = (['-map', '0:a:0', '-c:a', 'libmp3lame', '-q:a', '0', str(folder / 'audio.mp3')]
+                          if fmt == 'mp3' else ['-map', '0:a:0', '-f', 'null', '-'])
+                check = subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-i', str(flac), *output],
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+                if check.returncode:
+                    raise UserError('La pista FLAC no se pudo decodificar completa. Probá descargarla otra vez.')
+                if fmt == 'mp3':
+                    flac.unlink()
+            else:
+                if fmt == 'flac':
+                    raise UserError('Esta pista no tiene una fuente FLAC.')
+                self.download_youtube(folder, track, fmt, progress)
+            candidates = [p for p in folder.iterdir() if p.suffix in MEDIA_EXTS]
+            if len(candidates) != 1 or candidates[0].stat().st_size < 1000:
+                raise UserError('La fuente no produjo un archivo de audio válido.')
+            source = candidates[0]
+            from mutagen import File
+            audio = File(source)
+            if audio is None or audio.info is None or not 0 < audio.info.length <= 3610:
+                raise UserError('El audio obtenido no pasó la verificación.')
+            track = dict(track)
+            track['duration_seconds'] = float(audio.info.length)
+            if self.enricher:
+                try:
+                    enrichment = self.enricher(dict(track))
+                    for key in ('lyrics', 'synced_lyrics', 'genres', 'metadata_sources', 'metadata_status', 'metadata_attributions'):
+                        if key in enrichment:
+                            track[key] = enrichment[key]
+                    if enrichment.get('warnings'):
+                        track['warning'] = ' '.join(str(x) for x in enrichment['warnings'])[:1000]
+                except Exception:
+                    track['warning'] = 'El audio se guardó; no se pudieron completar las letras o los géneros.'
+            with self.lock:
+                cover = None
+                with self.db() as db:
+                    custom = db.execute('SELECT cover FROM custom_art WHERE id IN (?,?) ORDER BY id=? DESC LIMIT 1',(track['id'],track.get('youtube_id',''),track.get('youtube_id',''))).fetchone()
+                if custom:
+                    track['original_cover'] = track.get('original_cover') or track.get('cover','')
+                    track['cover'] = custom[0]
+                    cover = (self.data/'artwork'/(custom[0].rsplit('/',1)[-1]+'.jpg')).read_bytes()
+                elif track.get('cover'):
+                    try:
+                        cover = self.catalog.cover_file(track['cover'].rsplit('/', 1)[-1]).read_bytes()
+                    except Exception:
+                        track['warning'] = (track.get('warning', '') + ' El audio se guardó, pero la fuente no entregó la portada.').strip()
+                tag_file(source, track, cover)
+                # Copy to destination filesystem, then publish with an exclusive hard link.
+                name = safe_name(track['artist'], 'Artista') + ' - ' + safe_name(track['title']) + ' [' + track['id'].replace(':', '-') + ']' + source.suffix
+                with self.db() as db:
+                    selected_folder = db.execute("SELECT value FROM library_options WHERE key='output_folder'").fetchone()
+                try:
+                    output_directory = music_path(self.music, selected_folder[0] if selected_folder else '', directory=True)
+                except (ValueError, OSError):
+                    raise UserError('La carpeta de salida ya no está disponible. Elegí otra en Ajustes.') from None
+                destination = output_directory / name
+                temporary = output_directory / ('.ingest-' + uuid.uuid4().hex + '.tmp')
+                try:
+                    with temporary.open('xb') as output, source.open('rb') as original:
+                        shutil.copyfileobj(original, output)
+                        output.flush(); os.fsync(output.fileno())
+                    try:
+                        os.link(temporary, destination)
+                    except FileExistsError:
+                        # Never replace an existing user file or trust its contents as ours.
+                        name = destination.stem + '-' + uuid.uuid4().hex[:8] + source.suffix
+                        destination = output_directory / name
+                        os.link(temporary, destination)
+                    name = destination.relative_to(self.music).as_posix()
+                    if track.get('synced_lyrics'):
+                        try:
+                            track['lyrics_file'] = self.publish_lyrics(destination, track['synced_lyrics'])
+                        except (OSError, UnicodeError):
+                            track['warning'] = (track.get('warning', '') + ' No se pudo guardar el archivo LRC adicional; se conservó la letra embebida.').strip()
+                    summary = {key: value for key, value in track.items() if key not in ('lyrics', 'synced_lyrics')}
+                    with self.db() as db:
+                        if track.get('verified_native') is not None and track.get('source'):
+                            self.sources.index.learn(db, track['source'], track['verified_native'], track['id'])
+                        db.execute('INSERT OR REPLACE INTO files VALUES(?,?,?,?,?)', (track['id'], fmt, name, json.dumps(summary, ensure_ascii=False), jobid))
+                finally:
+                    temporary.unlink(missing_ok=True)
+            progress(100)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    def download_youtube(self, folder, track, fmt, progress):
+        with self.sources.vault.youtube_file() as cookie_file:
+            engine = self.extractor.command() if self.extractor else [sys.executable, '-I', '-m', 'yt_dlp']
+            session = ['--cookies', cookie_file] if cookie_file else []
+            command = engine + session + ['--ignore-config', '--no-cache-dir', '--no-playlist', '--newline', '--no-colors', '--socket-timeout', '20', '--retries', '1', '--fragment-retries', '1', '--max-filesize', '150M', '--match-filter', 'duration <= 3600 & !is_live', '--js-runtimes', 'deno', '-f', 'bestaudio/best', '-x', '--audio-format', 'mp3' if fmt == 'mp3' else 'best', '--audio-quality', '0', '-o', str(folder / 'audio.%(ext)s'), 'https://www.youtube.com/watch?v=' + track['id']]
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf8', errors='replace', start_new_session=(os.name == 'posix'))
             lines = queue.Queue()
             def reader():
@@ -669,65 +855,3 @@ class Store:
                         process.kill()
                     process.wait(timeout=10)
                 process.stdout.close()
-            candidates = [p for p in folder.iterdir() if p.suffix in MEDIA_EXTS]
-            if len(candidates) != 1 or candidates[0].stat().st_size < 1000:
-                raise UserError('La fuente no produjo un archivo de audio válido.')
-            source = candidates[0]
-            from mutagen import File
-            audio = File(source)
-            if audio is None or audio.info is None or not 0 < audio.info.length <= 3610:
-                raise UserError('El audio obtenido no pasó la verificación.')
-            track = dict(track)
-            track['duration_seconds'] = float(audio.info.length)
-            if self.enricher:
-                try:
-                    enrichment = self.enricher(dict(track))
-                    for key in ('lyrics', 'synced_lyrics', 'genres', 'metadata_sources', 'metadata_status', 'metadata_attributions'):
-                        if key in enrichment:
-                            track[key] = enrichment[key]
-                    if enrichment.get('warnings'):
-                        track['warning'] = ' '.join(str(x) for x in enrichment['warnings'])[:1000]
-                except Exception:
-                    track['warning'] = 'El audio se guardó; no se pudieron completar las letras o los géneros.'
-            cover = None
-            if track.get('cover'):
-                try:
-                    cover = self.catalog.cover_file(track['cover'].rsplit('/', 1)[-1]).read_bytes()
-                except Exception:
-                    track['warning'] = (track.get('warning', '') + ' El audio se guardó, pero la fuente no entregó la portada.').strip()
-            tag_file(source, track, cover)
-            # Copy to destination filesystem, then publish with an exclusive hard link.
-            name = safe_name(track['artist'], 'Artista') + ' - ' + safe_name(track['title']) + ' [' + track['id'] + ']' + source.suffix
-            with self.db() as db:
-                selected_folder = db.execute("SELECT value FROM library_options WHERE key='output_folder'").fetchone()
-            try:
-                output_directory = music_path(self.music, selected_folder[0] if selected_folder else '', directory=True)
-            except (ValueError, OSError):
-                raise UserError('La carpeta de salida ya no está disponible. Elegí otra en Ajustes.') from None
-            destination = output_directory / name
-            temporary = output_directory / ('.ingest-' + uuid.uuid4().hex + '.tmp')
-            try:
-                with temporary.open('xb') as output, source.open('rb') as original:
-                    shutil.copyfileobj(original, output)
-                    output.flush(); os.fsync(output.fileno())
-                try:
-                    os.link(temporary, destination)
-                except FileExistsError:
-                    # Never replace an existing user file or trust its contents as ours.
-                    name = destination.stem + '-' + uuid.uuid4().hex[:8] + source.suffix
-                    destination = output_directory / name
-                    os.link(temporary, destination)
-                name = destination.relative_to(self.music).as_posix()
-                if track.get('synced_lyrics'):
-                    try:
-                        track['lyrics_file'] = self.publish_lyrics(destination, track['synced_lyrics'])
-                    except (OSError, UnicodeError):
-                        track['warning'] = (track.get('warning', '') + ' No se pudo guardar el archivo LRC adicional; se conservó la letra embebida.').strip()
-                summary = {key: value for key, value in track.items() if key not in ('lyrics', 'synced_lyrics')}
-                with self.db() as db:
-                    db.execute('INSERT OR REPLACE INTO files VALUES(?,?,?,?,?)', (track['id'], fmt, name, json.dumps(summary, ensure_ascii=False), jobid))
-            finally:
-                temporary.unlink(missing_ok=True)
-            progress(100)
-        finally:
-            shutil.rmtree(folder, ignore_errors=True)

@@ -1,0 +1,58 @@
+/* Reserve the same four text rows beneath every square cover. */
+.record-card{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1.4rem 1.35rem 1.35rem 1.5rem;row-gap:2px;align-content:start}
+.record-card>.record-picture{grid-row:1;margin-block-end:7px}
+.record-card>.record-title,.record-card>.record-by,.record-card>.record-release{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;max-width:100%;margin:0;align-self:center}
+.record-card>.record-title{grid-row:2;display:block;line-height:1.35rem;overflow-wrap:normal}
+.record-card>.record-by{grid-row:3;line-height:1.3rem}
+.record-by>.record-link{display:inline;line-height:inherit;font-size:inherit;vertical-align:baseline}
+.record-card>.record-release{grid-row:4;line-height:1.3rem}
+.record-card>.record-format{grid-row:5;align-self:center;justify-self:start;margin:0;line-height:1rem;font-size:.69rem;padding:.12rem .42rem}
+.record-by:focus-within{outline:1px dotted var(--accent);outline-offset:1px}
+.record-card .record-check{appearance:none;position:absolute;inset:0 auto auto 0;display:grid;place-items:start;width:44px;height:44px;padding:8px;margin:0;background:none;border:none;outline:none;opacity:0;cursor:pointer}
+.record-check::before{content:'';display:block;width:19px;height:19px;background:#151a21c9;border:1.5px solid #f1f5f9c2;border-radius:5px;box-sizing:border-box}
+.record-check:checked::before{background:#b4cef2;border-color:#d6e6fc}
+.record-check:checked::after{content:'';position:absolute;top:12px;left:15px;width:4px;height:8px;border:solid #1c2e42;border-width:0 2px 2px 0;transform:rotate(44deg)}
+.record-picture:hover .record-check{opacity:0}
+.record-card .record-check:hover,.record-card .record-check:focus-visible,.selecting-records .record-check,.record-card .record-check:checked{opacity:1}
+.record-check:focus-visible::before{outline:2px solid var(--accent);outline-offset:2px}
+.record-picture .record-open{touch-action:manipulation;-webkit-touch-callout:none;user-select:none}
+.record-picture [data-cover-tip]{pointer-events:auto;cursor:pointer;outline-offset:2px}
+.record-picture [data-cover-tip]::after{content:attr(data-cover-tip);position:absolute;display:none;max-width:min(15rem,65vw);text-align:start;padding:4px 8px;border:1px solid #536071;border-radius:6px;background:#10151def;color:#f0f5fb;font:500 .75rem/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px #0008;z-index:5}
+.record-picture [data-cover-tip]:hover::after,.record-picture [data-cover-tip]:focus-visible::after{display:block}
+.record-kind::after{bottom:calc(100% + 4px);left:0}
+.record-source::after{top:calc(100% + 4px);right:0}
+.record-saved{display:grid;place-items:center;position:absolute;right:0;bottom:41px;width:23px;height:21px;border-radius:5px 0 0 5px;background:#a2e2b1;color:#103020;box-shadow:0 1px 5px #0005}
+.record-saved svg{width:15px;height:15px;stroke-width:3px}
+.record-saved::after{right:calc(100% + 4px);bottom:0}
+.record-saved[hidden]{display:none}
+.record-skeleton-grid{pointer-events:none}
+#results>.record-skeleton-grid{grid-column:1/-1}
+.record-skeleton{display:grid;min-width:0;gap:8px}
+.record-skeleton i{display:block;border-radius:4px;background:#20252d}
+.record-skeleton .skeleton-art{width:100%;aspect-ratio:1;border-radius:12px;animation:skeleton-breathe 1.8s ease-in-out infinite}
+.record-skeleton .skeleton-title,.record-skeleton .skeleton-artist,.record-skeleton .skeleton-release{height:.67rem;max-width:100%;background:linear-gradient(95deg,#1e242d 31%,#354050 47%,#1e242d 65%);background-size:240% 100%;animation:skeleton-shine 1.8s linear infinite}
+.record-skeleton .skeleton-title{width:82%;height:.85rem;margin-top:3px}
+.record-skeleton .skeleton-artist{width:62%}.record-skeleton .skeleton-release{width:48%;margin-bottom:20px}
+@keyframes skeleton-breathe{0%,100%{background-color:#181d24}50%{background-color:#29313c}}
+@keyframes skeleton-shine{from{background-position:100% 0}to{background-position:-70% 0}}
+.ux-progress{pointer-events:none;position:fixed;top:max(5px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:12;display:flex;align-items:center;gap:6px;background:#131922f0;border:1px solid #394457;border-radius:999px;padding:3px 8px;color:#d5def0;font-size:.69rem}
+.ux-spinner{display:inline-block;width:12px;height:12px;border:2px solid #39475b;border-top-color:#b6d2fa;border-radius:50%;animation:ux-spin 800ms linear infinite}
+@keyframes ux-spin{to{transform:rotate(360deg)}}
+.ux-progress[hidden]{display:none}
+.tour-replay{margin-block:.5rem 1rem}
+#music-tour{inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;padding:0;border:0;border-radius:0;margin:0;overflow:hidden;background:transparent;color:var(--text)}
+#music-tour::backdrop{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.tour-shade{position:fixed;inset:0;background:#03060b90;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);pointer-events:none}
+.tour-outline{position:fixed;border:2px solid #adceff;border-radius:10px;pointer-events:none}
+.tour-box{position:fixed;width:min(370px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow:auto;background:#121820;border:1px solid #485a70;border-radius:16px;padding:1.1rem 1.2rem;box-shadow:0 14px 48px #0008}
+.tour-head,.tour-foot{display:flex;align-items:center;gap:.5rem}.tour-head{justify-content:space-between}
+.tour-head small{color:#aabbd0;font-size:.75rem}.tour-head .text-action,.tour-foot .text-action{padding:.4rem 0;margin:0;font-size:.78rem}
+.tour-box h2{font-size:1.22rem;letter-spacing:-.015em;line-height:1.25;margin:.55rem 0 .45rem}
+.tour-box p{font-size:.91rem;color:#c5d1e2;line-height:1.48;margin:0}
+.tour-foot{margin-top:1rem;flex-wrap:wrap}.tour-foot>.text-action{margin-right:auto}.tour-foot>.primary,.tour-foot>.quiet{font-size:.8rem;padding:.42rem .72rem;min-height:36px}
+.tour-example{display:flex;flex-wrap:wrap;gap:.45rem .8rem;padding:.8rem 0 .1rem}.tour-example[hidden]{display:none}
+.tour-example-key{display:flex;align-items:center;gap:.33rem;font-size:.77rem}
+.tour-demo-symbol{display:grid;place-items:center;width:23px;height:23px;border-radius:6px;background:#293340}
+.tour-demo-symbol svg{width:16px;height:16px}.tour-demo-symbol.demo-stack{box-shadow:2px -3px #67788d}
+.tour-demo-symbol.demo-check{color:#a2e2b1}
+@media (prefers-reduced-motion:reduce){.record-skeleton i,.ux-spinner{animation:none!important}.record-skeleton .skeleton-art{background:#242b34}.ux-spinner{border-color:#8299b7}}

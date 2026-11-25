@@ -62,6 +62,106 @@ class AccountsAPI(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
+    async def test_rotation_owner_only_and_credentials_redacted(self):
+        await self.add_friend()
+        endpoint='/api/rotation?library='+self.lid
+        for client in (self.friend,self.stranger):
+            self.assertEqual((await client.get(endpoint)).status_code,403)
+            self.assertEqual((await client.patch(endpoint,json={'enabled':True})).status_code,403)
+        secret='rotation-fixture-secret'
+        response=await self.owner.patch(endpoint,json={
+            'navidrome_url':'http://navidrome:4533','username':'fixture',
+            'password':secret,'interval_seconds':3600})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertTrue(response.json()['credential_set'])
+        self.assertNotIn(secret,response.text)
+        self.assertNotIn('token',response.text)
+        malformed=await self.owner.patch(endpoint,json={'interval_seconds':3,'password':secret})
+        self.assertEqual(malformed.status_code,422)
+        self.assertNotIn(secret,malformed.text)
+        with patch('rotation.Navidrome.call',return_value={'status':'ok','type':'Navidrome'}), patch('rotation.Navidrome.snapshot',return_value={}):
+            self.assertEqual((await self.owner.post('/api/rotation/test',json={})).status_code,200)
+        reset=await self.owner.patch(endpoint,json={'username':'different'})
+        self.assertFalse(reset.json()['credential_set'])
+
+
+    async def test_advanced_engine_status_is_owner_only(self):
+        await self.add_friend()
+        url = '/api/maintenance/engine?library=' + self.lid
+        result = await self.owner.get(url)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['interval_hours'], 24)
+        self.assertEqual((await self.friend.get(url)).status_code, 403)
+        self.assertEqual((await self.stranger.get(url)).status_code, 403)
+        settings = await self.owner.get('/api/sources')
+        self.assertTrue(settings.json()['can_import_sessions'])
+        forwarded = await self.owner.get('/api/sources', headers={'X-Forwarded-Host': 'example.test'})
+        self.assertFalse(forwarded.json()['can_import_sessions'])
+
+    async def test_bar_routes_track_artist_album_and_playlist_links(self):
+        for path,kind in [('/watch?v=fixture_A01','song'),('/channel/UCabcdefghijklmnopqrstuv','artist'),
+                          ('/browse/MPREb12345678','album'),('/playlist?list=PLabcdefghijk','playlist')]:
+            response=await self.owner.post('/api/search/link',json={'url':'https://music.youtube.com'+path})
+            self.assertEqual(response.status_code,200,response.text)
+            self.assertEqual(response.json()['type'],kind)
+        with patch.object(self.module.catalog,'factory') as factory:
+            factory.return_value.get_album_browse_id.return_value='MPREb12345678'
+            result=await self.owner.post('/api/search/link',json={'url':'https://music.youtube.com/playlist?list=OLAK5uy_abcdefghijk'})
+            self.assertEqual(result.json(),{'type':'album','id':'MPREb12345678'})
+        for action in ('favorite','favorite'):
+            res=await self.owner.post('/api/home/choices',json={'action':action,'values':['Mismo artista']})
+            self.assertEqual(res.status_code,200)
+        self.assertEqual(res.json()['changed'],[])
+
+    async def test_private_sources_and_import_home(self):
+        await self.add_friend()
+        path = '/api/sources?library=' + self.lid
+        self.assertTrue((await self.owner.get(path)).json()['best'])
+        self.assertEqual((await self.friend.get(path)).status_code, 403)
+        self.assertEqual((await self.stranger.get(path)).status_code, 403)
+        await self.owner.patch(path, json={'best': False})
+        self.assertFalse((await self.owner.get(path)).json()['best'])
+        self.assertTrue((await self.stranger.get('/api/sources')).json()['best'])
+        row={'title':{'runs':[{'text':'Para mi biblioteca'}]},
+             'navigationEndpoint':{'watchEndpoint':{'videoId':'fixture_A01','watchEndpointMusicSupportedConfigs':
+                  {'watchEndpointMusicConfig':{'musicVideoType':'MUSIC_VIDEO_TYPE_ATV'}}}},
+             'thumbnailRenderer':{'musicThumbnailRenderer':{'thumbnail':{'thumbnails':[{'url':'https://lh3.googleusercontent.com/sample=w544-h544'}]}}}}
+        html=json.dumps({'musicTwoRowItemRenderer':row})+' '*100000
+        response = await self.owner.put('/api/sources/home-html', json={'content': html})
+        self.assertEqual(response.json(), {'imported': 1})
+        self.assertEqual((await self.owner.get('/api/home')).json()['sections'][0]['items'][0]['title'], 'Para mi biblioteca')
+        self.assertEqual((await self.stranger.get('/api/home')).json()['sections'], [])
+        self.assertEqual((await self.friend.get('/api/home?library=' + self.lid)).status_code, 403)
+        sample = 'PRIVATE-EXAMPLE-ONLY'
+        for body in (['invalid', sample], {'content': sample}):
+            bad = await self.owner.put('/api/sources/youtube/cookies', json=body)
+            self.assertIn(bad.status_code, (400, 422))
+            self.assertNotIn(sample, bad.text)
+        remote = await self.owner.put('/api/sources/youtube/cookies', json={'content': sample}, headers={'X-Forwarded-Host': 'demo.example'})
+        self.assertEqual(remote.status_code, 400)
+
+    async def test_purchased_track_preview_and_queue_format(self):
+        from unittest.mock import patch
+        from test_sources import MANIFEST, QID, SONG
+        with patch('qobuz_store.small_response', return_value=(json.dumps(MANIFEST).encode(), '')):
+            imported = await self.owner.post('/api/sources/qobuz/purchases', json={'link':'qbzdl://example-test'})
+        self.assertEqual(imported.status_code, 200)
+        catalog = self.module.catalog
+        catalog.remember([SONG])
+        with patch.object(catalog, 'search', return_value={'items': [SONG]}):
+            found = (await self.owner.get('/api/search?q=horizonte')).json()['items']
+        self.assertEqual([(t['id'],t['output_format']) for t in found], [(SONG['id'],'flac')])
+        preview = await self.owner.post('/api/preview', json={'type':'song','id':QID})
+        self.assertEqual(preview.json()['tracks'][0]['output_format'],'flac')
+        private = await self.stranger.post('/api/preview', json={'type':'song','id':QID})
+        self.assertEqual(private.status_code, 400)
+        result = await self.owner.post('/api/jobs', json={'tracks':[{'id':SONG['id'],'expected_format':'flac'}]})
+        self.assertEqual(result.status_code, 201)
+        self.assertEqual((await self.owner.get('/api/jobs')).json()['items'][0]['formats'], ['flac'])
+        await self.owner.patch('/api/sources', json={'best':False})
+        changed = await self.owner.post('/api/jobs', json={'tracks':[{'id':SONG['id'],'expected_format':'flac'}]})
+        self.assertEqual(changed.status_code, 400)
+
     async def test_registration_owns_exactly_one_library_and_session_is_hashed(self):
         self.assertEqual(len(self.owner_info['libraries']), 1)
         self.assertEqual(self.owner_info['libraries'][0]['role'], 'owner')

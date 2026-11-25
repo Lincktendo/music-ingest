@@ -12,9 +12,11 @@ const Profile = {
   },
   forgetKey(){ $('key-value').value=''; $('new-key').hidden=true; },
   reset(){
-    this.revision++; window.MediaUI?.reset(); window.Selection?.reset(); window.Navigation?.refresh(); window.AutomationUI?.reset(); this.proposalsKey=null; this.forgetKey(); closeSuggestions(); state.search++; state.previewRequest++;
+    this.revision++; window.RecordUX?.reset();window.RotationUI?.reset();window.DownloadUI?.reset();window.ListeningCollection?.reset();
+    if(this.user&&this.library)window.ListeningCollection?.load();window.RecordCards?.reset(); window.CoverEditor?.reset(); window.Discovery?.reset(); $('advanced-settings').open=false; $('engine-version').textContent='…'; $('engine-checked').textContent='…'; $('engine-status').textContent=''; window.SourceUI?.reset(); window.MediaUI?.reset(); window.Selection?.reset(); window.Navigation?.refresh(); window.AutomationUI?.reset(); this.proposalsKey=null; this.forgetKey(); closeSuggestions(); state.search++; state.previewRequest++;
     window.Artists?.close(); $('search-submit').disabled=false;
-    state.jobsKey=''; state.libraryKey=''; state.preview=null; state.selected.clear();
+    $('query').value=''; $('results').replaceChildren();
+    state.jobsKey=''; state.completedJobs=null; state.libraryKey=''; state.preview=null; state.selected.clear();
     $('preview-dialog').close(); $('queue-count').hidden=true;
     for(const id of ['jobs','library','members','keys','proposals','providers'])$(id).replaceChildren();
     for(const id of ['profile-status','jobs-status','library-status','preview-status'])status(id,'');
@@ -35,7 +37,7 @@ const Profile = {
     let remembered='';try{remembered=sessionStorage.getItem('mi-library-'+this.user.id)||'';}catch{}
     this.library=this.libraries.find(x=>x.id===remembered)||this.libraries.find(x=>x.id===data.default_library)||this.libraries[0]||null;
     this.reset();this.renderAccount();$('auth-password').value='';status('auth-status','');$('auth-dialog').close();
-    navigate(state.page||'buscar',false);loadJobs();
+    navigate(state.page||'inicio',false);loadJobs();
   },
   setMode(mode){
     this.mode=mode;const register=mode==='register';
@@ -57,17 +59,35 @@ const Profile = {
     for(const library of this.libraries){const option=el('option','',library.role==='owner'?'Mi biblioteca':library.name);option.value=library.id;option.selected=library.id===this.library?.id;$('active-library').append(option);}
     $('library-switch').hidden=!this.library;$('active-role').textContent=this.owner()?'PROPIETARIO':'COLABORADOR';
     $('profile-intro').textContent=this.owner()?'Tu biblioteca, tus colaboradores y las herramientas que conectás.':'Estás colaborando en '+(this.library?.name||'una biblioteca')+'. Proponé música y seguí su estado acá.';
-    $('proposal-description').textContent=this.owner()?'Revisá las selecciones que te proponen tus colaboradores y tus IA.':'Las propuestas que enviaste a esta biblioteca, con su estado actualizado.';
+    $('proposal-description').textContent=this.owner()?'Revisá las selecciones que te proponen tus colaboradores.':'Las propuestas que enviaste a esta biblioteca, con su estado actualizado.';
     $('owner-settings').hidden=!this.owner();$('auto-approve').checked=!!this.library?.auto_approve;
     $('enqueue').textContent=this.owner()?'Guardar en mi biblioteca':'Proponer a esta biblioteca';
-    $('agent-guide').textContent='Music Ingest está en '+location.origin+'\n\nUsá la clave que te proporcioné como Authorization: Bearer <CLAVE>.\n1. Buscá con GET /api/search?q=...&kind=songs (también albums o artists).\n2. Revisá con POST /api/preview y JSON {"id":"ID","type":"song"} o {"url":"ENLACE"}.\n3. Elegí pistas verificadas y proponelas con POST /api/proposals y JSON {"tracks":[{"id":"ID_PISTA"}],"format":"mp3"}.\n4. Consultá GET /api/proposals para ver su estado.\n\nNo descargues directamente ni intentes cambiar configuraciones. Las propuestas necesitan aprobación salvo que yo haya activado la aprobación automática. La clave solo funciona con mi biblioteca.';
+    $('agent-guide').textContent='Music Ingest está en '+location.origin+'\n\nUsá la clave que te proporcioné como Authorization: Bearer <CLAVE>.\n1. Buscá con GET /api/search?q=...&kind=songs (también albums o artists).\n2. Revisá con POST /api/preview y JSON {"id":"ID","type":"song"} o {"url":"ENLACE"}.\n3. Elegí pistas verificadas y proponelas con POST /api/proposals y JSON {"tracks":[{"id":"ID_PISTA"}],"format":"auto"}.\n4. Consultá GET /api/proposals para ver su estado.\n\nNo descargues directamente ni intentes cambiar configuraciones. Las propuestas necesitan aprobación salvo que yo haya activado la aprobación automática. La clave solo funciona con mi biblioteca.';
   },
   async show(){
     if(!this.user)return;this.renderAccount();const rev=this.revision;status('profile-status','');
-    const actions=[this.loadProposals()];if(this.owner())actions.push(this.loadMembers(),this.loadKeys(),this.loadProviders(),window.AutomationUI?.load());
+    const actions=[this.loadProposals()];if(this.owner())actions.push(this.loadMembers(),window.Discovery?.settings(),window.AutomationUI?.load());
     const results=await Promise.allSettled(actions);
     if(rev!==this.revision)return;
     const failed=results.find(x=>x.status==='rejected');if(failed)status('profile-status',failed.reason.message,true);
+  },
+  async showAdvanced(){
+    if(!this.owner()||!$('advanced-settings').open)return;
+    const rev=this.revision;
+    $('server-origin').textContent=location.origin;
+    const results=await Promise.allSettled([this.loadKeys(),this.loadProviders(),this.loadEngine()]);
+    if(rev!==this.revision||!$('advanced-settings').open)return;
+    const failed=results.find(x=>x.status==='rejected');
+    if(failed)status('profile-status',failed.reason.message,true);
+  },
+  async loadEngine(){
+    const rev=this.revision;
+    const data=await api('/api/maintenance/engine');
+    if(rev!==this.revision||!$('advanced-settings').open)return;
+    $('engine-version').textContent='yt-dlp '+data.version;
+    $('engine-checked').textContent=data.last_check?new Date(data.last_check*1000).toLocaleString('es',{dateStyle:'short',timeStyle:'short'}):'Primera revisión pendiente';
+    const notes={checking:'Se está buscando una actualización.',unavailable:'La última revisión quedó pendiente. Tus descargas usan la versión disponible.',fallback:'Se está usando la última versión verificada disponible.',updated:'La actualización está instalada.'};
+    $('engine-status').textContent=[notes[data.result],'Se revisa automáticamente cada 24 horas mientras el servidor está encendido.'].filter(Boolean).join(' ');
   },
   async loadMembers(){
     const rev=this.revision,id=this.library?.id;if(!this.owner())return;
@@ -87,7 +107,7 @@ const Profile = {
     if(!items.length){container.append(el('p','section-copy',this.owner()?'Todavía no hay propuestas para revisar.':'Buscá música y tocá «Proponer» para enviar tu primera selección.'));return;}
     for(const item of items){
       const row=el('article','proposal-row'),head=el('div','job-head'),info=el('div','row-info');
-      info.append(el('h3','',item.title||'Selección de música'),el('small','',[item.actor_name,(item.tracks?.length||0)+' pistas',item.format==='original'?'Original':'MP3'].filter(Boolean).join(' · ')));
+      info.append(el('h3','',item.title||'Selección de música'),el('small','',[item.actor_name,(item.tracks?.length||0)+' pistas',[...new Set((item.tracks||[]).map(t=>SourceUI.label(t.output_format||item.format)))].join(' / ')].filter(Boolean).join(' · ')));
       const label={pending:'Por revisar',approved:'Aprobada',rejected:'Rechazada'}[item.status]||item.status;
       head.append(info,el('span','status-tag'+(item.status==='rejected'?' bad':''),label));row.append(head);
       const list=el('details','proposal-details');list.append(el('summary','','Ver selección'));
@@ -160,4 +180,8 @@ $('copy-key').addEventListener('click',()=>copyText($('key-value').value,$('key-
 $('hide-key').addEventListener('click',()=>Profile.forgetKey());
 $('copy-guide').addEventListener('click',()=>copyText($('agent-guide').textContent));
 $('refresh-proposals').addEventListener('click',async()=>{const button=$('refresh-proposals');button.disabled=true;try{await Profile.loadProposals();}catch(err){status('profile-status',err.message,true);}finally{button.disabled=false;}});
+$('advanced-settings').addEventListener('toggle',()=>{
+  if($('advanced-settings').open)Profile.showAdvanced();
+  else Profile.forgetKey();
+});
 document.addEventListener('DOMContentLoaded',()=>Profile.init());

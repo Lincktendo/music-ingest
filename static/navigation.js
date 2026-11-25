@@ -10,11 +10,10 @@ const Navigation={
  async go(action){
   if(!Profile.user)return;
   if(['playlist','schedule','favorites'].includes(action)){if(!Profile.owner())return;const revision=Profile.revision;const page=action==='favorites'?'favoritos':'playlists';await navigate(page);if(revision!==Profile.revision||state.page!==page)return;const target=$(action==='schedule'?'schedule-card':action==='favorites'?'page-favoritos':'playlist-url');target.tabIndex=target.tabIndex<0?-1:target.tabIndex;target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'smooth'});return;}
-  const targets={playlist:['following-card','playlist-url'],folder:['folder-card','folder-select'],people:['people-card','member-username'],ai:['ai-card','key-label'],providers:['providers-card',null],proposals:['proposals-card',null]};
+  const targets={playlist:['following-card','playlist-url'],folder:['folder-card','folder-select'],people:['people-card','member-username'],proposals:['proposals-card',null]};
   if(action==='songs'||action==='artists'){
    navigate('buscar');Artists.close();
    document.querySelector('input[name="kind"][value="'+(action==='artists'?'artists':'songs')+'"]').checked=true;
-   $('query').placeholder=action==='artists'?'Buscá tu artista favorito…':'Una canción, un artista o un enlace…';
    $('query').focus({preventScroll:true});$('search-form').scrollIntoView({block:'start',behavior:'smooth'});
    if(action==='artists')toast('Buscá un artista, abrí su ficha y tocá «Mantener su música al día».');
    return;

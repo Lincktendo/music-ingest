@@ -14,6 +14,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Test player and Auto DJ
+        run: node --test tests/auto-dj.test.cjs
       - name: Build clean image
         run: docker build --platform linux/amd64 -t music-ingest:check .
       - name: Test without personal data
