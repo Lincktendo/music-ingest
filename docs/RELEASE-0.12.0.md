@@ -14,14 +14,14 @@ Siguen disponibles las descargas MP3 y FLAC cuando la fuente ofrece audio sin p�
 
 ## Actualizar
 
-Desde la carpeta de tu instalación:
+Respaldá tus datos y, en el `compose.yaml` de tu instalación, cambiá la imagen de Music Ingest a `ghcr.io/lincktendo/music-ingest:0.12.0`. Conservá tus puertos, carpetas y volúmenes. Después, desde esa misma carpeta:
 
 ```sh
 docker compose pull
 docker compose up -d
 ```
 
-Usá los mismos archivos `-f` que elegiste al instalar. Conservá los volúmenes `data` y `music`. Para instalar junto a Navidrome, consultá [la guía de las dos opciones](NAVIDROME-Y-ROTACION.md).
+Usá los mismos archivos `-f` y el mismo nombre de proyecto (`-p`, si lo usaste) que elegiste al instalar. Conservá los volúmenes `data` y `music`. Para instalar junto a Navidrome, consultá [la guía de las dos opciones](https://github.com/Lincktendo/music-ingest/blob/main/docs/NAVIDROME-Y-ROTACION.md).
 
 ## Texto breve para el video
 
