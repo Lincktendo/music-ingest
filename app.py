@@ -33,7 +33,7 @@ from account_routes import install_account_routes
 from automation import PLAYLIST_ID, Following, install as install_following
 
 log = logging.getLogger('music_ingest')
-VERSION = '0.12.1'
+VERSION = '0.12.2'
 data = Path(os.environ.get('DATA_DIR', '/data'))
 music = Path(os.environ.get('MUSIC_DIR', '/music'))
 catalog = Catalog(data)

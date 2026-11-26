@@ -3,7 +3,7 @@ FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb
 LABEL org.opencontainers.image.source="https://github.com/Lincktendo/music-ingest" \
       org.opencontainers.image.title="Music Ingest" \
       org.opencontainers.image.licenses="GPL-3.0-or-later" \
-      org.opencontainers.image.version="0.12.1"
+      org.opencontainers.image.version="0.12.2"
 COPY --from=deno /deno /usr/local/bin/deno
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates gpgv && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 music && useradd --uid 10001 --gid music --no-create-home music \

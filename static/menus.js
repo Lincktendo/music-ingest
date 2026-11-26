@@ -70,6 +70,22 @@ const RecordMenus={
   },
   root(){
     const item=this.item,song=(item.type||'song')==='song';this.node.replaceChildren();
+    if(item.downloadJob){
+      const file=item.downloadFile,job=item.downloadJob;
+      if(file){
+        this.option(Profile.owner()?'Editar datos y portada':'Ver datos','music',()=>DownloadUI.details(file));
+        const addLink=(url,label,icon)=>{const link=MediaUI.link(url,label,icon);if(link){link.classList.add('record-menu-action');link.setAttribute('role','menuitem');link.onclick=()=>this.close();this.node.append(link);}};
+        if(file.lyrics_url)this.option('Ver letra','lyrics',()=>DownloadUI.showLyrics(file));
+        else this.option('Letra no disponible','lyrics',()=>{},{disabled:true});
+        addLink(file.url,'Guardar como…','download');
+      }
+      if(!file||job.warnings?.length)this.option('Ver detalles de la descarga','lyrics',()=>DownloadUI.openQuick({item,jobs:[job.id]}));
+      if(!file&&['failed','interrupted'].includes(job.status)&&Profile.owner()){
+        this.option('Reintentar','refresh',async()=>{const rev=Profile.revision;await post('/api/jobs/'+encodeURIComponent(job.id)+'/retry');if(rev!==Profile.revision)return;DownloadUI.trackJob(job.id);state.jobsKey='';await loadJobs();});
+        this.option('Quitar intento','trash',()=>DownloadUI.removeAttempt(job,{disabled:false}));
+      }
+      this.position();return;
+    }
     const saved=DownloadUI.isSaved(item),pending=DownloadUI.pendingFor(item);
     if(item.type!=='artist')this.option(saved?'Ver archivo y editar datos':pending?'Ver descarga':item.type==='album'?'Descargar álbum':'Descargar',
       saved?'check':'download',()=>DownloadUI.quickQueue(item));

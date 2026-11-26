@@ -259,11 +259,46 @@ const DownloadUI={
       const active=button.dataset.downloadView===this.view;button.setAttribute('aria-pressed',String(active));button.classList.toggle('active',active);
     }
     const root=$('jobs'),failed=$('failed-attempts');root.replaceChildren();failed.replaceChildren();
-    root.classList.toggle('downloads-grid',this.view==='grid');failed.classList.toggle('downloads-grid',this.view==='grid');
+    for(const container of [root,failed])container.className=this.view==='grid'?'record-grid download-cards':'download-list';
     const failures=items.filter(job=>['failed','interrupted'].includes(job.status));$('failed-section').hidden=!failures.length;
-    for(const job of items)(['failed','interrupted'].includes(job.status)?failed:root).append(this.jobCard(job));
+    for(const job of items){
+      const target=['failed','interrupted'].includes(job.status)?failed:root;
+      if(job.files?.length)for(const file of job.files)target.append(this.compactCard(job,file));
+      if(!job.files?.length||job.status!=='completed')target.append(this.compactCard(job));
+    }
     if(!root.children.length)empty(root,failures.length?'No hay descargas activas':'Tu cola está tranquila',
       failures.length?'Podés reintentar las descargas pendientes más abajo.':'Cuando descargués música, vas a ver su progreso acá.');
+  },
+  compactCard(job,file=null){
+    const title=file?.title||job.title||'Selección de música',artist=file?.artist||job.artist||'Artista sin identificar';
+    const item={...file,id:file?.source_id||job.id,title,artist,downloadFile:file,downloadJob:job};
+    const card=el('article','record-card download-card');card.dataset.jobId=job.id;
+    const frame=el('div','record-picture'),open=()=>file?MediaUI.play(file):this.openQuick({item,jobs:[job.id]});
+    const photo=RecordCards.button('record-open',undefined,open);photo.setAttribute('aria-label',(file?'Escuchar ':'Ver descarga de ')+title);
+    photo.append(cover(file?.cover||job.cover));frame.append(photo);card.append(frame);
+    const info=el('div','download-card-info');
+    const name=RecordCards.button('record-title',title,open);name.title=title;
+    const by=el('div','record-by',artist);by.title=artist;
+    const album=el('div','record-release',file?.album||'Single');album.title=album.textContent;
+    const footer=el('div','download-card-footer');
+    const fmt=file?.format||job.formats?.[0];if(fmt){const badge=el('small','format-chip',fmt.toUpperCase());badge.dataset.format=fmt;badge.dataset.on='true';footer.append(badge);}
+    const text=file?'Guardada':({queued:'En cola',running:Math.round(job.progress||0)+' %',failed:'Error · Reintentar',interrupted:'Interrumpida'})[job.status]||'Procesando';
+    const status=el('small','download-card-status',text);status.title=job.error||text;footer.append(status);
+    if(file&&job.warnings?.length){const warning=el('span','download-card-warning','!');warning.title='Algunos datos no se completaron. Revisalos en los tres puntos.';footer.append(warning);}
+    info.append(name,by,album,footer);card.append(info);
+    if(!file){const progress=el('progress','download-card-progress');progress.max=100;progress.value=job.progress||0;progress.setAttribute('aria-label','Progreso');frame.append(progress);}
+    RecordMenus.attach(card,item);return card;
+  },
+  async showLyrics(file){
+    const url=safeUrl(file.lyrics_url,'/api/files/');if(!url)return;
+    const revision=Profile.revision,dialog=el('dialog','download-lyrics'),top=el('div','dialog-top');
+    const close=RecordCards.button('icon-button','×',()=>dialog.close());close.setAttribute('aria-label','Cerrar letra');
+    top.append(el('h2','',file.title||'Letra'),close);const body=el('pre','','Cargando letra…');dialog.append(top,body);
+    dialog.setAttribute('aria-label','Letra de '+(file.title||'la canción'));dialog.setAttribute('closedby','any');document.body.append(dialog);
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+    try{const response=await fetch(url);if(!response.ok)throw Error('No se pudo abrir la letra.');const text=await response.text();
+      if(revision!==Profile.revision){dialog.close();return;}body.textContent=text;
+    }catch(e){body.textContent=e.message;}
   },
   jobCard(job){
     const box=el('article','job download-job');box.dataset.jobId=job.id;
