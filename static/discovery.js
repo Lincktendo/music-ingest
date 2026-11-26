@@ -80,7 +80,7 @@ const Discovery={
       }
       if(!data.can_import_sessions)card.append(el('small','','Conectá las cookies desde localhost en la computadora del servidor.'));
       if(s.session||s.html){const small=el('small','',[s.session?'Sesión conectada':'',s.html?s.html+' referencias':''].filter(Boolean).join(' · '));card.append(small);}
-      for(const [enabled,ending,label] of [[s.session,'cookies','Desconectar cuenta'],[s.html,'html','Quitar página']]){
+      for(const [enabled,ending,label] of [[s.session,'cookies','Desconectar cuenta'],[s.html,'html','Borrar referencias HTML']]){
         if(enabled){const b=el('button','text-action',label);b.type='button';b.onclick=()=>this.remove(s.id,ending);card.append(b);}
       }
       grid.append(card);
@@ -96,7 +96,7 @@ const Discovery={
     await SourceUI.action(html?'Importando referencias…':'Conectando tu sesión…',async()=>{
       const content=html?await readSourceHTML(file,key):await file.text();if(epoch!==SourceUI.epoch)return;
       const response=await api('/api/sources/'+encodeURIComponent(key)+(html?'/html':'/cookies'),{method:'PUT',body:JSON.stringify({content})});
-      return html?response.imported+' referencias importadas.':'Sesión conectada.';
+      return html?response.imported+' referencias revisadas. Se suman a las anteriores, sin duplicados.':'Sesión conectada.';
     });
   },
   remove(key,ending){
@@ -153,14 +153,9 @@ const Discovery={
         const heading=el('h3','',kind==='album'?'Álbumes para descubrir':'Para escuchar ahora');
         header.append(heading);
         if(filter==='group')header.append(sourceMark(item.source,this.name(item.source),true));
-        const controls=el('div','shelf-controls'),grid=el('div','record-grid recommendation-row');
+        const grid=el('div','record-grid recommendation-grid');
         grid.setAttribute('role','list');grid.setAttribute('aria-label',heading.textContent);
-        for(const [direction,label] of [[-1,'Anteriores'],[1,'Siguientes']]){
-          const b=el('button','quiet',direction<0?'‹':'›');b.type='button';b.setAttribute('aria-label',label+' — '+heading.textContent);
-          b.onclick=()=>grid.scrollBy({left:direction*grid.clientWidth*.85,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
-          controls.append(b);
-        }
-        header.append(controls);section.append(header,grid);root.append(section);groups.set(key,grid);
+        section.append(header,grid);root.append(section);groups.set(key,grid);
       }
       const card=RecordCards.card(item);card.setAttribute('role','listitem');groups.get(key).append(card);
     }

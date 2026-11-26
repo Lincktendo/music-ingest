@@ -31,3 +31,16 @@
 @media(prefers-reduced-motion:reduce){.record-identity .record-kind,.record-identity .record-source{animation:none}.record-identity .record-kind{visibility:hidden;opacity:0}.record-identity .record-source{visibility:visible;opacity:1}}
 
 .record-identity .record-source svg{width:22px;height:22px}
+.record-identity .record-source[data-source="youtube"]{color:#ff344b}
+.record-identity .record-source[data-source="qobuz"]{color:#2189ff}
+.record-identity .record-source[data-source="soundcloud.com"]{color:#ff6600}
+.record-identity .record-source[data-source="bandcamp.com"]{color:#1da0c3}
+.record-identity .record-source[data-source="vimeo.com"]{color:#1ab7ea}
+.record-identity .record-source[data-source="dailymotion.com"]{color:#12b8ff}
+.record-identity .record-source[data-source="mixcloud.com"]{color:#b2a1ff}
+.record-identity .record-source[data-source="archive.org"]{color:#f3f3f3}
+.artist-bookmark{display:inline-flex;align-items:center;gap:8px;margin-top:14px}
+.artist-bookmark svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.artist-bookmark.is-active{color:#ffa3b9}.artist-bookmark.is-active svg{fill:currentColor}
+.artist-saved-section{margin-top:28px}#saved-artists .record-open,#saved-artists .record-open .cover{border-radius:50%}
+.record-card[data-record-kind="artist"] .cover>.action-svg{width:36%;height:36%;color:#8f9baa;opacity:.7}

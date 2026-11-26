@@ -57,7 +57,7 @@ def install_sources(app, access, registry):
     @app.delete('/api/sources/home-html')
     def clear_page(request: Request, library: str | None = None):
         source = sources(request, library)
-        source.set_option('home_html', [])
+        source.index.clear_imports('youtube')
         return source.settings()
 
     @app.get('/api/sources/qobuz/reference')
@@ -90,7 +90,7 @@ def install_sources(app, access, registry):
         src=sources(request,library)
         if key not in src.index.active():
             raise UserError('Fuente desconocida.')
-        src.set_option('home_html' if key=='youtube' else 'page:'+key,[])
+        src.index.clear_imports(key)
         return {'ok':True}
 
     @app.patch('/api/sources/{key}/search')

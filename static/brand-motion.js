@@ -3,10 +3,7 @@
 // A small solid model of Lincktendo's four pillars, rendered locally with alpha.
 // The favicon continues to use the existing static image.
 (() => {
-  window.addEventListener('music-ingest:playback-state',event=>{
-    const playing=event.detail?.playing===true && event.detail?.loading!==true;
-    document.body.classList.toggle('brand-playing',playing);
-  });
+  document.body.classList.remove('brand-playing');
   let latestDownloads = 0, updateModel = null;
   window.addEventListener('music-ingest:downloads-state',event=>{
     const count=Number(event.detail?.active);

@@ -81,7 +81,12 @@ const RecordMenus={
       this.option('Agregar al final de la cola','queue',()=>ListeningCollection.appendQueue(item));
       this.option(item.album?'Ir al álbum':'Ver single','album',()=>RecordCards.release(item));
       this.option('Agregar a playlist','plus',()=>this.playlists(),{keep:true});
-    }else if(item.type==='artist')this.option('Ver artista','artist',()=>RecordCards.artist(item,item.title));
+    }else if(item.type==='artist'){
+      this.option('Ver artista','artist',()=>RecordCards.artist(item,item.title));
+      const liked=!!Artists.findSaved(item);
+      this.option(liked?'Quitar de tus artistas':'Guardar en Artistas','heart',()=>Artists.bookmark(item),{active:liked});
+      if(Artists.savedRevision!==Profile.revision){const seq=this.sequence;Artists.loadSaved().then(()=>{if(seq===this.sequence&&this.node)this.root();}).catch(()=>{});}
+    }
     else this.option('Ver '+(item.type==='playlist'?'playlist':'álbum'),'album',()=>RecordCards.open(item));
     this.node.append(el('hr','record-menu-separator'));
     this.option(Selection.items.has(item.id)?'Deseleccionar':'Seleccionar','check',()=>Selection.toggle(item));

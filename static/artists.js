@@ -1,15 +1,88 @@
 'use strict';
 const Artists={
-  request:0,
+  request:0,saved:[],savedRevision:-1,savedRead:0,savedPromise:null,bookmarking:new Set(),
+  reset(){this.close();this.saved=[];this.savedRevision=-1;this.savedRead++;this.savedPromise=null;this.bookmarking.clear();$('saved-artists')?.replaceChildren();},
+  identity(artist){return {name:artist.title||artist.artist||'',source:artist.source||'youtube',id:(artist.source||'youtube')==='youtube'&&artist.id?.startsWith('UC')?artist.id:'',cover:artist.cover||''};},
+  findSaved(artist){const meta=this.identity(artist),norm=s=>String(s||'').trim().toLocaleLowerCase();return this.saved.find(s=>s.source===meta.source&&(s.id&&meta.id?s.id===meta.id:norm(s.title)===norm(meta.name)));},
+  async loadSaved(force=false){
+    if(!Profile.user||!Profile.library)return [];
+    if(!force&&this.savedRevision===Profile.revision)return this.saved;
+    if(!force&&this.savedPromise)return this.savedPromise;
+    const rev=Profile.revision,read=++this.savedRead;
+    const promise=(async()=>{const data=await api('/api/listening/artists');if(rev!==Profile.revision||read!==this.savedRead)return [];this.saved=data.items||[];this.savedRevision=rev;this.paintHearts();return this.saved;})();
+    this.savedPromise=promise;
+    try{return await promise;}finally{if(this.savedPromise===promise)this.savedPromise=null;}
+  },
+  paintHearts(){for(const button of document.querySelectorAll('.artist-bookmark')){
+    const saved=!!this.findSaved(button.artistRef);button.classList.toggle('is-active',saved);button.setAttribute('aria-pressed',String(saved));
+    const label=saved?'Quitar de tus artistas':'Guardar en Artistas';button.title=label;button.setAttribute('aria-label',label);
+    button.replaceChildren(ListeningCollection.icon('heart'),el('span','',saved?'Guardado en Artistas':'Guardar en Artistas'));
+  }},
+  heart(artist){const button=el('button','quiet artist-bookmark');button.type='button';button.artistRef=artist;button.title='Guardar en Artistas';button.onclick=()=>this.bookmark(artist).catch(e=>toast(e.message));
+    const saved=!!this.findSaved(artist);button.classList.toggle('is-active',saved);button.setAttribute('aria-pressed',String(saved));button.append(ListeningCollection.icon('heart'),el('span','',saved?'Guardado en Artistas':'Guardar en Artistas'));
+    this.loadSaved().then(()=>this.paintHearts()).catch(()=>{});return button;
+  },
+  async bookmark(artist,enabled=null,notify=true){
+    const rev=Profile.revision,meta=this.identity(artist),key=meta.source+'|'+(meta.id||meta.name.toLocaleLowerCase());
+    if(this.bookmarking.has(key))return;this.bookmarking.add(key);
+    try{
+      await this.loadSaved();if(rev!==Profile.revision)return;
+      const saved=this.findSaved(artist);
+      if(enabled===true&&saved||enabled===false&&!saved)return;
+      if(saved){await api('/api/listening/artists/'+encodeURIComponent(saved.key),{method:'DELETE'});if(rev!==Profile.revision)return;this.saved=this.saved.filter(s=>s.key!==saved.key);}
+      else{const added=await api('/api/listening/artists',{method:'PUT',body:JSON.stringify(meta)});if(rev!==Profile.revision)return;this.saved=[added,...this.saved.filter(s=>s.key!==added.key)];}
+      this.savedRead++;this.savedPromise=null;this.savedRevision=rev;this.paintHearts();if(state.page==='favoritos')this.paintSaved();
+      if(notify)toast(saved?'Quitado de tus artistas.':'Guardado en Artistas.');
+    }finally{if(rev===Profile.revision)this.bookmarking.delete(key);}
+  },
+  async saveSelected(items,current){
+    const artists=new Map();
+    for(const item of items){
+      const names=item.type==='artist'?[{name:item.title,id:item.id}]:item.artists?.length?item.artists:RecordCards.artistNames(item).map(name=>({name,id:''}));
+      for(const person of names){if(!person.name)continue;const artist={type:'artist',id:person.id||'',title:person.name,source:item.source||'youtube',cover:item.type==='artist'?item.cover:''},meta=this.identity(artist);
+        artists.set(meta.source+'|'+(meta.id||meta.name.toLocaleLowerCase()),artist);}
+    }
+    if(!artists.size)throw Error('No encontramos artistas en esta selección.');
+    for(const artist of artists.values()){if(!current())return;await this.bookmark(artist,true,false);}
+    if(current())toast(artists.size===1?'Artista guardado.':'Artistas guardados.');
+  },
+  paintSaved(){
+    const root=$('saved-artists');if(!root)return;root.replaceChildren();
+    if(!this.saved.length){root.append(el('p','empty-state','Guardá artistas con el corazón de su perfil o desde el menú de tres puntos. No activa descargas.'));return;}
+    const grid=el('div','record-grid');for(const artist of this.saved)grid.append(RecordCards.card({...artist,id:artist.id||'artist:'+artist.key,type:'artist'}));root.append(grid);
+  },
+  async showSaved(force=false){
+    const rev=Profile.revision;status('saved-artists-status','Cargando tus artistas…');
+    try{await this.loadSaved(force);if(rev!==Profile.revision||state.page!=='favoritos')return;this.paintSaved();status('saved-artists-status','');}
+    catch(e){if(rev===Profile.revision)status('saved-artists-status',e.message,true);}
+    if(Profile.owner())AutomationUI.load().catch(()=>{});
+  },
+  async openNamed(name,item){
+    if(state.page!=='buscar')navigate('buscar');closeSuggestions();
+    const request=++this.request,revision=Profile.revision,panel=$('artist-panel');
+    panel.hidden=false;$('results').hidden=true;$('results-heading').hidden=true;$('welcome').hidden=true;
+    const feedback=el('p','inline-status','Cargando artista…');feedback.setAttribute('role','status');panel.replaceChildren(feedback);panel.scrollIntoView({block:'start'});
+    try{
+      const data=await RecordCards.collection('artist',name,item);if(request!==this.request||revision!==Profile.revision)return;
+      if(data.open?.id)return this.open(data.open.id);
+      const artist={id:'',type:'artist',source:item.source||'youtube',title:data.title||name,cover:data.cover||''};
+      const back=RecordCards.button('quiet artist-back','← Volver a resultados',()=>this.close()),hero=el('div','artist-hero'),info=el('div');
+      info.append(el('span','eyebrow','ARTISTA'),el('h2','',artist.title),this.heart(artist));hero.append(cover(artist.cover),info);panel.replaceChildren(back,hero);
+      const songs=data.songs||[],albums=data.albums||[];
+      for(const [title,items] of [['Canciones',songs],['Álbumes',albums]])if(items.length){panel.append(el('h3','artist-section-title',title));const grid=el('div','record-grid');items.forEach(t=>grid.append(RecordCards.card(t)));panel.append(grid);}
+      if(!songs.length&&!albums.length)panel.append(el('p','section-copy','Todavía no hay música disponible de este artista en esta fuente. Podés guardarlo en Artistas para volver después.'));
+    }catch(e){if(request===this.request&&revision===Profile.revision){feedback.textContent=e.message;feedback.classList.add('error');}}
+  },
   close(){this.request++;$('artist-panel').hidden=true;$('artist-panel').replaceChildren();$('results').hidden=false;$('results-heading').hidden=false;},
   async open(id){
+    if(state.page!=='buscar')navigate('buscar');
     closeSuggestions();const request=++this.request,revision=Profile.revision,panel=$('artist-panel');
     panel.hidden=false;$('results').hidden=true;$('results-heading').hidden=true;$('welcome').hidden=true;panel.replaceChildren();
     const back=el('button','quiet artist-back','← Volver a resultados');back.type='button';back.addEventListener('click',()=>this.close());panel.append(back);panel.scrollIntoView({block:'start'});
     const feedback=el('p','inline-status','Cargando artista…');feedback.setAttribute('role','status');panel.append(feedback);
     try{
       const artist=await api('/api/artists/'+encodeURIComponent(id));if(request!==this.request||revision!==Profile.revision)return;feedback.remove();
-      const hero=el('div','artist-hero'),info=el('div');info.append(el('span','eyebrow','ARTISTA'),el('h2','',artist.title||'Artista'));
+      const hero=el('div','artist-hero'),info=el('div');info.append(el('span','eyebrow','ARTISTA'),el('h2','',artist.title||'Artista'),this.heart({...artist,source:'youtube'}));
       hero.append(cover(artist.cover),info);panel.append(hero);
       if(Profile.owner()){
         const box=el('section','profile-card artist-follow'),heading=el('h3','','¿Querés que sus próximas rolas lleguen solas?');
@@ -59,6 +132,7 @@ const Artists={
   }
 };
 window.Artists=Artists;
+$('refresh-artists').addEventListener('click',()=>Artists.showSaved(true));
 
 function libraryMetadata(item){
   const genres=Array.isArray(item.genres)?item.genres.filter(x=>typeof x==='string').slice(0,3):[];

@@ -13,12 +13,13 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
-from source_catalog import provider, EXID
+from source_catalog import provider, EXID, clean_search_results
 from qobuz_store import QID
 from download_tools import install_download_tools
 from rotation import install_rotation
 from recommendations import install_recommendations, record_search
 from playlist_imports import install_imports
+from artist_favorites import install_artist_favorites
 from listening_collection import install_collection
 from listening import install_listening
 from source_routes import install_sources
@@ -32,7 +33,7 @@ from account_routes import install_account_routes
 from automation import PLAYLIST_ID, Following, install as install_following
 
 log = logging.getLogger('music_ingest')
-VERSION = '0.12.0'
+VERSION = '0.12.1'
 data = Path(os.environ.get('DATA_DIR', '/data'))
 music = Path(os.environ.get('MUSIC_DIR', '/music'))
 catalog = Catalog(data)
@@ -82,6 +83,7 @@ install_recommendations(app, access, registry, rotation)
 install_sources(app, access, registry)
 install_listening(app, access, registry)
 install_collection(app, access, registry)
+install_artist_favorites(app, access, registry)
 install_imports(app, access, registry, following)
 install_download_tools(app, access, registry)
 
@@ -206,9 +208,18 @@ def search(request: Request, q: str = '', kind: Literal['songs', 'albums', 'arti
             if not purchases and not extras:
                 raise
     items=sources.describe(items)
+    purchase_by_id={t['id']:t for t in purchases}
+    # A verified match may have artwork in the purchase catalog even when the
+    # search provider omitted it; retain that card before deduplicating sources.
+    for item in items:
+        match=purchase_by_id.get(item.get('flac_id'))
+        if match and not item.get('cover'):
+            item['cover']=match.get('cover','')
     matched={item.get('flac_id') for item in items}
     distinct=[t for t in purchases if t['id'] not in matched]
-    return {'items': sources.describe(distinct+extras)+items}
+    # Official catalog hits stay ahead of optional site references. Incomplete
+    # imports and previews must not masquerade as full songs in the grid.
+    return {'items': clean_search_results(items+sources.describe(distinct+extras),kind)}
 
 
 @app.get('/api/suggestions')
@@ -245,10 +256,10 @@ def collection(request:Request, kind:Literal['artist','album'], name:str=Query(m
                source:str='youtube', artist:str='', library:str|None=None):
     _,lib=access(request,library)
     src=registry.get(lib['id']).sources
-    if source not in src.index.active():
+    if source not in src.index.active() and kind!='artist':
         raise UserError('Esta fuente ya no está activa.')
     norm=lambda value:' '.join(str(value or '').split()).casefold()
-    if source=='youtube':
+    if source=='youtube' or kind=='artist':
         result=catalog_call(catalog.search,name,'artists' if kind=='artist' else 'albums')['items']
         matches=[t for t in result if norm(t['title'])==norm(name) and (kind=='artist' or not artist or norm(artist)==norm(t['artist']))]
         if len(matches)==1:
@@ -262,7 +273,7 @@ def collection(request:Request, kind:Literal['artist','album'], name:str=Query(m
     songs=[r for r in rows if r.get('source','youtube')==source and r.get('type','song')=='song'
            and (norm(name) in [norm(a) for a in r.get('artist','').split(';')] if kind=='artist'
                 else norm(r.get('album'))==norm(name) and (not artist or norm(r.get('artist'))==norm(artist)))]
-    return {'type':kind,'title':name,'songs':src.describe(songs[:100])}
+    return {'type':kind,'title':name,'songs':clean_search_results(src.describe(songs[:100]),'songs')}
 
 
 @app.post('/api/search/link')

@@ -36,7 +36,7 @@ const Selection = {
     document.body.classList.toggle('selecting-records',!!n);
     $('bulk-count').textContent=n+' '+(n===1?'selección':'selecciones');
     $('bulk-download').textContent=this.busy?'Un momento…':Profile.owner()?'Descargar':'Enviar selección';
-    $('bulk-hide').hidden=$('bulk-favorite').hidden=!Profile.owner();
+    $('bulk-hide').hidden=!Profile.owner();$('bulk-favorite').hidden=false;
     bar.querySelectorAll('button').forEach(b=>b.disabled=this.busy);
     document.querySelectorAll('[data-bulk-id]').forEach(c=>{
       c.checked=this.items.has(c.dataset.bulkId);c.disabled=this.busy;
@@ -51,6 +51,7 @@ const Selection = {
     finally{if(op===this.operation){this.busy=false;this.render();}}
   },
   preference(action){
+    if(action==='favorite')return this.run((items,current)=>Artists.saveSelected(items,current));
     return this.run(async(items,current)=>{
       const values=action==='hide'?items.map(t=>t.id):items.flatMap(RecordCards.artistNames);
       const unique=[...new Set(values.filter(Boolean))];

@@ -2,7 +2,7 @@
 
 **Vos y tu música.** Un reproductor para escuchar, descubrir música y mantener tu biblioteca al día. Con yt-dlp como motor de descargas, desde el navegador de tu computadora o celular.
 
-Versión **0.12.0** · [Guía rápida](docs/GUIA-RAPIDA.md) · [Integraciones y acceso para IA](INTEGRATIONS.md) · [Instalar solo o con Navidrome y activar la rotación](docs/NAVIDROME-Y-ROTACION.md)
+Versión **0.12.1** · [Guía rápida](docs/GUIA-RAPIDA.md) · [Integraciones y acceso para IA](INTEGRATIONS.md) · [Instalar solo o con Navidrome y activar la rotación](docs/NAVIDROME-Y-ROTACION.md)
 
 ## Qué podés hacer
 
@@ -37,7 +37,7 @@ docker compose up -d
 4. Abrí **http://localhost:8511** y creá tu usuario y contraseña.
 5. Buscá una canción y revisá sus datos antes de descargarla.
 
-La imagen se descarga de `ghcr.io/lincktendo/music-ingest:0.12.0`. La instalación empieza vacía: no incluye cuentas, contraseñas, claves de proveedores, cookies, música ni datos del autor.
+La imagen se descarga de `ghcr.io/lincktendo/music-ingest:0.12.1`. La instalación empieza vacía: no incluye cuentas, contraseñas, claves de proveedores, cookies, música ni datos del autor.
 
 Docker crea dos volúmenes persistentes: `data` para la configuración y `music` para las canciones. Sus nombres efectivos llevan el prefijo del proyecto Compose. No hace falta preparar permisos manualmente para estos volúmenes nuevos. En **Ajustes → Carpeta de salida** elegís una subcarpeta de ese almacenamiento; no es una carpeta del teléfono.
 
@@ -75,7 +75,7 @@ Creá tu cuenta antes de compartir acceso. El registro está abierto a quienes p
 | --- | --- |
 | **Barra superior** | Cambiá entre canciones, álbumes y artistas; la búsqueda se actualiza sola. Marcá canciones para descargarlas juntas. |
 | **Playlists** | Pegá una lista pública o no listada y elegí una importación única o mantenerla actualizada. |
-| **Artistas** | Administrá seguimientos. Desde la ficha del artista podés incluir también su catálogo actual. |
+| **Artistas** | Guardá artistas con su corazón. Administrá por separado las descargas automáticas de sus novedades o catálogo actual. |
 | **Descargas** | Revisá progreso y errores, reintentá trabajos y escuchá archivos terminados. |
 | **Biblioteca** | Abrí un artista y un álbum, escuchá y, si sos el dueño, eliminá canciones. |
 | **Ajustes** | Elegí tu carpeta e invitá colaboradores. En **Usuarios avanzados** ves el motor de descargas, Docker y las conexiones opcionales con IA. |

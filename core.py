@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
+from concurrent.futures import Future, TimeoutError as FutureTimeout
 from functools import partial
 import hashlib
 import io
@@ -30,7 +31,7 @@ from storage import music_path
 VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}\Z")
 ALBUM_ID = re.compile(r"MPREb[A-Za-z0-9_-]{5,150}\Z")
 ARTIST_ID = re.compile(r"UC[A-Za-z0-9_-]{20,100}\Z")
-COVER_HOSTS = {'static.qobuz.com', 'static2.qobuz.com','i1.sndcdn.com','f4.bcbits.com','i.ytimg.com', 'img.youtube.com', 'yt3.googleusercontent.com', 'lh3.googleusercontent.com', 'yt3.ggpht.com'}
+COVER_HOSTS = {'static.qobuz.com', 'static2.qobuz.com','i1.sndcdn.com','a1.sndcdn.com','f4.bcbits.com','i.ytimg.com', 'img.youtube.com', 'yt3.googleusercontent.com', 'lh3.googleusercontent.com', 'yt3.ggpht.com'}
 from audio_formats import ORDER, native_audio, track_formats
 
 MEDIA_EXTS = {'.wav', '.aiff', '.mp3', '.m4a', '.opus', '.ogg', '.flac'}
@@ -93,6 +94,12 @@ class Catalog:
         self.lock = threading.RLock()
         self.cache = {}
         self.cover_sources = {}
+        self.cover_options = {}
+        self.cover_pending = {}
+        self.cover_slots = threading.BoundedSemaphore(6)
+        self.cover_index = self.data / 'cover-index.db'
+        with self.cover_db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS cover_origins(ident TEXT PRIMARY KEY, urls TEXT NOT NULL, checked REAL NOT NULL DEFAULT 0)')
         self.suggest_factory = suggest_factory or factory or suggestion_client
         self.suggestion_cache = {}
         self.suggestion_slots = threading.BoundedSemaphore(2)
@@ -141,25 +148,112 @@ class Catalog:
             finally:
                 self.suggestion_slots.release()
 
+    @contextmanager
+    def cover_db(self):
+        if self.cover_index.is_symlink() or self.cover_index.resolve().parent != self.data.resolve():
+            raise UserError('El índice de portadas no es válido.')
+        connection = sqlite3.connect(self.cover_index, timeout=8)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    @staticmethod
+    def cover_variants(url):
+        """Known public image derivatives only. No query tokens or new hosts are kept."""
+        if not Catalog.valid_cover(url):
+            return []
+        parsed = urlsplit(url)._replace(query='', fragment='')
+        original = parsed.geturl()
+        path = parsed.path
+        variants = []
+        if parsed.hostname in ('lh3.googleusercontent.com','yt3.googleusercontent.com','yt3.ggpht.com'):
+            # Music search often returns only a 60/120px derivative of the album art.
+            dimensions = re.search(r'=w(\d+)-h(\d+)(?=-|$)', path)
+            if dimensions:
+                width, height = int(dimensions[1]), int(dimensions[2])
+                if 0 < width <= 1200 and 0 < height <= 1200:
+                    scale = 1200 / max(width, height)
+                    replacement = '=w'+str(round(width*scale))+'-h'+str(round(height*scale))
+                    variants.append(parsed._replace(path=path[:dimensions.start()]+replacement+path[dimensions.end():]).geturl())
+            else:
+                size = re.search(r'=s(\d+)(?=-|$)', path)
+                if size and 0 < int(size[1]) < 1200:
+                    variants.append(parsed._replace(path=path[:size.start()]+'=s1200'+path[size.end():]).geturl())
+        elif parsed.hostname in ('i1.sndcdn.com','a1.sndcdn.com'):
+            # These are the official yt-dlp Soundcloud artwork variants; original
+            # preserves real uploaded detail instead of enlarging the 100px "large".
+            suffix = re.search(r'-(?:mini|tiny|small|badge|large|crop|original|t\d+x\d+)\.(jpg|png)$', path)
+            if suffix:
+                for size in ('original','t500x500'):
+                    variants.append(parsed._replace(path=path[:suffix.start()]+'-'+size+'.'+suffix[1]).geturl())
+        elif parsed.hostname in ('i.ytimg.com','img.youtube.com'):
+            match = re.fullmatch(r'(/vi(?:_webp)?/[\w-]{11}/)(?:default|mqdefault|hqdefault|sddefault|maxresdefault|hq720)\.(jpg|webp)', path)
+            if match:
+                for size in ('maxresdefault','hq720','sddefault'):
+                    variants.append(parsed._replace(path=match[1]+size+'.'+match[2]).geturl())
+        variants.append(original)
+        return list(dict.fromkeys(v for v in variants if Catalog.valid_cover(v)))[:5]
+
+    @staticmethod
+    def cover_rank(thumb):
+        try:
+            width = max(0, min(16000, int(thumb.get('width') or 0)))
+            height = max(0, min(16000, int(thumb.get('height') or width)))
+            return width*height
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
     def cover(self, thumbs):
-        valid = [x for x in thumbs or [] if isinstance(x, dict) and self.valid_cover(x.get('url', ''))]
+        valid = [x for x in (thumbs if isinstance(thumbs, list) else []) if isinstance(x, dict) and self.valid_cover(x.get('url', ''))]
         if not valid:
             return ''
-        url = max(valid, key=lambda x: x.get('width') or 0)['url']
-        ident = hashlib.sha256(url.encode()).hexdigest()
+        best = max(valid, key=self.cover_rank)
+        urls = self.cover_variants(best['url'])
+        # The HQ URL makes 60px and 120px versions of the same art share one cache.
+        ident = hashlib.sha256(urls[0].encode()).hexdigest()
+        # Old metadata can still point at hashes of the original tiny URL. Restore
+        # those aliases without changing any song data or a user's custom artwork.
+        aliases = {hashlib.sha256(x['url'].encode()).hexdigest() for x in valid}
+        aliases.add(ident)
+        encoded = json.dumps(urls, separators=(',',':'))
         with self.lock:
-            while len(self.cover_sources) >= 2048 and ident not in self.cover_sources:
-                self.cover_sources.pop(next(iter(self.cover_sources)))
-            self.cover_sources[ident] = url
+            changed = [key for key in aliases if self.cover_options.get(key) != urls]
+            if changed:
+                with self.cover_db() as db:
+                    db.executemany('''INSERT INTO cover_origins(ident,urls) VALUES(?,?)
+                        ON CONFLICT(ident) DO UPDATE SET urls=excluded.urls WHERE cover_origins.urls!=excluded.urls''',
+                        [(key, encoded) for key in changed])
+            for key in aliases:
+                while len(self.cover_sources) >= 2048 and key not in self.cover_sources:
+                    expired = next(iter(self.cover_sources))
+                    self.cover_sources.pop(expired)
+                    self.cover_options.pop(expired, None)
+                # Existing saved-playlist/favorite consumers expect one public URL.
+                self.cover_sources[key] = urls[0]
+                self.cover_options[key] = urls
         return '/api/covers/' + ident
 
     @staticmethod
     def valid_cover(url):
         try:
+            if not isinstance(url, str) or len(url)>4096 or any(ord(c)<33 for c in url):
+                return False
             u = urlsplit(url)
             return u.scheme == 'https' and u.hostname in COVER_HOSTS and not u.username and not u.password and u.port in (None, 443)
         except (ValueError, TypeError):
             return False
+
+    @staticmethod
+    def cover_size(path):
+        try:
+            with Image.open(path) as image:
+                if 0 < image.width*image.height <= 16_000_000:
+                    return image.size
+        except (OSError, ValueError, Image.DecompressionBombError):
+            pass
+        return 0, 0
 
     def cover_file(self, ident):
         if not re.fullmatch('[a-f0-9]{64}', ident):
@@ -167,32 +261,105 @@ class Catalog:
         target = self.covers / (ident + '.jpg')
         if target.is_symlink() or target.resolve().parent != self.covers.resolve():
             raise UserError('Portada no válida.')
-        if target.is_file():
+        existing = self.cover_size(target) if target.is_file() else (0,0)
+        if min(existing)>=600:
             return target
         with self.lock:
-            url = self.cover_sources.get(ident)
-        if not url or not self.valid_cover(url):
+            with self.cover_db() as db:
+                origin = db.execute('SELECT urls,checked FROM cover_origins WHERE ident=?',(ident,)).fetchone()
+            urls = self.cover_options.get(ident)
+            if not urls and origin:
+                try:
+                    saved = json.loads(origin[0])
+                    urls = saved if isinstance(saved,list) else []
+                except (ValueError,TypeError):
+                    urls = []
+            urls = [url for url in (urls or [])[:5] if self.valid_cover(url) and not urlsplit(url).query and not urlsplit(url).fragment]
+            # Genuine small uploads stay small. Retry a failed HQ attempt tomorrow,
+            # rather than requesting every derivative on each card/player render.
+            if min(existing)>0 and (not urls or origin and time.time()-origin[1]<86400):
+                return target
+            flight = self.cover_pending.get(ident)
+            leader = flight is None
+            if leader and urls:
+                flight = self.cover_pending[ident] = Future()
+        if not urls:
             raise UserError('Esta portada ya no está disponible; repetí la búsqueda.')
-        # Redirects never inherit trust; fixed host allowlist and bounded response.
-        with requests.get(url, timeout=(8, 20), allow_redirects=False, stream=True) as response:
-            if response.status_code != 200:
-                raise UserError('No se pudo cargar la portada.')
-            payload = bytearray()
-            for chunk in response.iter_content(65536):
-                payload.extend(chunk)
-                if len(payload) > 5_000_000:
-                    raise UserError('Portada demasiado grande.')
-        with Image.open(io.BytesIO(payload)) as image:
-            if image.width * image.height > 16_000_000:
-                raise UserError('Portada demasiado grande.')
-            image = image.convert('RGB')
-            image.thumbnail((1000, 1000))
-            output = io.BytesIO()
-            image.save(output, 'JPEG', quality=90)
-        tmp = target.with_suffix('.' + uuid.uuid4().hex + '.tmp')
-        tmp.write_bytes(output.getvalue())
-        os.replace(tmp, target)
-        return target
+        if not leader:
+            try:
+                return flight.result(timeout=35)
+            except FutureTimeout:
+                if min(existing)>0:
+                    return target
+                raise UserError('La portada está tardando en cargar. Intentá de nuevo.') from None
+        try:
+            result = self.fetch_cover(target, urls, existing)
+            with self.lock, self.cover_db() as db:
+                db.execute('UPDATE cover_origins SET checked=? WHERE ident=?',(time.time(),ident))
+            flight.set_result(result)
+            return result
+        except Exception as error:
+            message = error if isinstance(error,UserError) else UserError('No se pudo cargar la portada. Intentá de nuevo.')
+            flight.set_exception(message)
+            raise message from None
+        finally:
+            with self.lock:
+                self.cover_pending.pop(ident,None)
+
+    def fetch_cover(self, target, urls, existing):
+        if not self.cover_slots.acquire(timeout=4):
+            if min(existing)>0:
+                return target
+            raise UserError('Hay varias portadas cargando. Intentá de nuevo.')
+        best, best_area = None, existing[0]*existing[1]
+        deadline = time.monotonic()+20
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                for url in urls:
+                    remaining = deadline-time.monotonic()
+                    if remaining<=0:
+                        break
+                    try:
+                        session.cookies.clear()
+                        # Redirects cannot expand the exact HTTPS host allowlist.
+                        with session.get(url,timeout=(min(4,remaining),min(8,remaining)),allow_redirects=False,stream=True) as response:
+                            if response.status_code!=200:
+                                continue
+                            length = response.headers.get('Content-Length','')
+                            if length.isdigit() and int(length)>5_000_000:
+                                continue
+                            payload = bytearray()
+                            for chunk in response.iter_content(65536):
+                                if len(payload)+len(chunk)>5_000_000 or time.monotonic()>deadline:
+                                    raise ValueError('bounded image')
+                                payload.extend(chunk)
+                        with Image.open(io.BytesIO(payload)) as image:
+                            if image.width*image.height>16_000_000:
+                                continue
+                            size=image.size
+                            if size[0]*size[1]>best_area:
+                                image=image.convert('RGB')
+                                image.thumbnail((1200,1200),Image.Resampling.LANCZOS)
+                                output=io.BytesIO();image.save(output,'JPEG',quality=94,subsampling=0)
+                                best,best_area=output.getvalue(),size[0]*size[1]
+                            if min(size)>=600 or urlsplit(url).hostname in ('i1.sndcdn.com','a1.sndcdn.com') and '-original.' in url:
+                                break
+                    except (requests.RequestException,OSError,ValueError,Image.DecompressionBombError):
+                        continue
+            if best is not None:
+                tmp=target.with_suffix('.'+uuid.uuid4().hex+'.tmp')
+                try:
+                    tmp.write_bytes(best)
+                    os.replace(tmp,target)
+                finally:
+                    tmp.unlink(missing_ok=True)
+                return target
+            if min(existing)>0:
+                return target
+            raise UserError('No se pudo cargar la portada. Intentá de nuevo.')
+        finally:
+            self.cover_slots.release()
 
     @staticmethod
     def artists(rows):

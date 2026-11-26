@@ -1,6 +1,7 @@
 **
 !Dockerfile
 !requirements.txt
+!artist_favorites.py
 !playlist_imports.py
 !recommendations.py
 !rotation.py

@@ -51,10 +51,10 @@ class Sources:
             sources.append({'id':key,'name':title_for(key),'search':key not in self.option('muted_search',[]),
                             'formats':formats,'enabled_formats':[f for f in formats if f not in prefs.get('off',[])],
                             'home':prefs.get('home',True),'favorite':prefs.get('favorite',False),
-                            'html':len(self.option('home_html' if key=='youtube' else 'page:'+key,[])), 'session':key in names})
+                            'html':self.index.imported_count(key), 'session':key in names})
         return {'sources':sources,
                 'available':[{'id':k,'name':n} for k,n in NAMES.items() if k not in active], 'best': self.option('best_quality', True), 'youtube': 'youtube' in names,
-                'qobuz': 'qobuz' in names, 'purchases': count, 'html_count': len(self.option('home_html', []))}
+                'qobuz': 'qobuz' in names, 'purchases': count, 'html_count': self.index.imported_count('youtube')}
 
     def configure(self,key,field,value,fmt=None):
         with self.store.lock:
@@ -92,6 +92,7 @@ class Sources:
             preferences.pop(key,None)
             save('source_preferences',preferences)
             db.execute('DELETE FROM library_options WHERE key=?',('page:'+key,))
+            db.execute('DELETE FROM source_imports WHERE source=?',(key,))
             db.execute('DELETE FROM source_secrets WHERE name=?',(key,))
             db.execute('DELETE FROM source_secrets WHERE name IN (SELECT id FROM source_index WHERE source=?)',(key,))
             db.execute('DELETE FROM source_index WHERE source=?',(key,))
@@ -145,7 +146,8 @@ class Sources:
         with self.store.lock:
             if 'youtube' not in self.index.active():
                 raise UserError('La fuente se eliminó.')
-            self.set_option('home_html', items)
+            self.index.merge_imports('youtube',items)
+            self.set_option('home_html', self.index.imported('youtube'))
         return {'imported': len(items)}
 
     def refresh_home(self, rows, revision):
@@ -179,7 +181,7 @@ class Sources:
         sections = []
         if rows and revision == self.option('youtube_revision') and cache.get('items'):
             sections.append({'title': 'Para vos en YouTube Music', 'items': cache['items']})
-        imported = self.option('home_html', [])
+        imported = self.index.imported('youtube')
         if imported:
             sections.append({'title': 'De tu página guardada', 'items': imported})
         with self.store.db() as db:

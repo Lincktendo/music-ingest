@@ -13,11 +13,11 @@ const RecordCards={
   },
   card(t){
     const item={...t,type:t.type||'song',source:t.source||(t.id?.startsWith('qb:')?'qobuz':'youtube')};
-    const card=el('article','record-card');card.dataset.recordId=item.id;
+    const card=el('article','record-card');card.dataset.recordId=item.id;card.dataset.recordKind=item.type;
     const frame=el('div','record-picture');
     const open=()=>Selection.items.size?Selection.toggle(item):this.open(item);
     const photo=this.button('record-open',undefined,open);
-    photo.setAttribute('aria-label','Abrir '+item.title);photo.append(cover(item.cover));frame.append(photo);
+    photo.setAttribute('aria-label','Abrir '+item.title);const portrait=cover(item.cover);if(item.type==='artist'&&!item.cover)portrait.replaceChildren(actionIcon('artist'));photo.append(portrait);frame.append(photo);
     const type=item.type==='album'?'Álbum':item.type==='artist'?'Artista':item.album?'Rola de álbum':'Single';
     const badge=(node,caption)=>{
       node.dataset.coverTip=caption;node.setAttribute('aria-label',caption);
@@ -33,7 +33,7 @@ const RecordCards={
     const kind=el('span','record-kind'+(type==='Rola de álbum'?' layered':''));
     kind.append(actionIcon(item.type==='album'?'album':item.type==='artist'?'artist':'music'));identity.append(badge(kind,type));
     const name=Discovery.name(item.source),source=sourceMark(item.source,name);
-    source.classList.add('record-source');identity.append(badge(source,name));frame.append(identity);
+    source.classList.add('record-source');source.dataset.source=item.source;identity.append(badge(source,name));frame.append(identity);
     const saved=el('span','record-saved');saved.append(actionIcon('check'));frame.append(badge(saved,'Ya está en la biblioteca'));
     saved.hidden=!(window.DownloadUI?.isSaved(item)??item.downloaded);
     card.append(frame);
@@ -79,6 +79,7 @@ const RecordCards={
     return api('/api/collection?'+q);
   },
   async named(kind,name,item){
+    if(kind==='artist')return Artists.openNamed(name,item);
     const rev=Profile.revision,request=++this.request;
     try{
       const data=await this.collection(kind,name,item);
@@ -97,7 +98,7 @@ const RecordCards={
     navigate('buscar');this.request++;
     const id=item.artists?.find(a=>a.name===name)?.id||(item.type==='artist'?item.id:'');
     if(id?.startsWith('UC'))return Artists.open(id);
-    return this.named('artist',name,item);
+    return Artists.openNamed(name,item);
   },
   async release(item){
     if(item.type==='album')return SourceUI.open(item);

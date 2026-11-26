@@ -8,7 +8,7 @@ const AutomationUI={
     $('check-interval').value=String(data.interval_seconds);
     $('following-backlog').textContent=data.pending_tracks?data.pending_tracks+' rolas esperando espacio en la cola. Se irán agregando solitas.':'';
     this.renderSources(data.items.filter(x=>x.kind==='playlist'),'following-list','Todavía no agregaste playlists. Pegá el enlace arriba para empezar.');
-    this.renderSources(data.items.filter(x=>x.kind==='artist'),'favorite-list','Todavía no seguís artistas. Tocá «Buscar un artista» para elegir el primero.');
+    this.renderSources(data.items.filter(x=>x.kind==='artist'),'favorite-list','No hay descargas automáticas de artistas activadas.');
     if(!$('folder-current').textContent)await this.browse('');
   },
   renderSources(items,target,emptyText){
@@ -64,7 +64,6 @@ $('playlist-form').addEventListener('submit',async event=>{
   }catch(e){status('playlist-feedback',e.message,true);}finally{button.disabled=false;}
 });
 document.querySelectorAll('[name="playlist-mode"]').forEach(input=>input.addEventListener('change',()=>{$('playlist-submit').textContent=input.value==='follow'?'Descargar y mantener al día':'Descargar una vez';}));
-$('refresh-artists').addEventListener('click',()=>AutomationUI.load().catch(e=>toast(e.message)));
 $('check-interval').addEventListener('change',async()=>{const input=$('check-interval'),revision=Profile.revision;input.disabled=true;try{await api('/api/following/settings',{method:'PATCH',body:JSON.stringify({seconds:Number(input.value)})});if(revision!==Profile.revision)return;await AutomationUI.load();toast('Frecuencia guardada para tus playlists y artistas.');}catch(e){toast(e.message);}finally{input.disabled=false;}});
 $('refresh-following').addEventListener('click',()=>AutomationUI.load().catch(e=>toast(e.message)));
 $('folder-up').addEventListener('click',()=>AutomationUI.browse(AutomationUI.folder.split('/').slice(0,-1).join('/')).catch(e=>toast(e.message)));

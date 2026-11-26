@@ -20,6 +20,37 @@ EXID=re.compile(r'ex:[a-f0-9]{32}\Z')
 SLOTS=threading.BoundedSemaphore(2)
 
 
+def clean_search_results(items, kind):
+    """Only show usable catalog cards; saved page links are not verified recordings."""
+    expected={'songs':'song','albums':'album','artists':'artist'}[kind]
+    result,seen=[],set()
+    for item in items:
+        if not isinstance(item,dict) or item.get('type','song')!=expected:
+            continue
+        if not str(item.get('title') or '').strip() or not item.get('cover'):
+            continue
+        if item.get('is_preview') or item.get('is_available') is False:
+            continue
+        if item.get('availability') in ('premium_only','subscriber_only','needs_auth','private'):
+            continue
+        source=item.get('source','youtube')
+        if expected=='song':
+            if not str(item.get('artist') or '').strip():
+                continue
+            if source=='youtube' and item.get('video_type') not in ('',None,'MUSIC_VIDEO_TYPE_ATV'):
+                continue
+            if source not in ('youtube','qobuz') and not item.get('full_audio_verified'):
+                continue
+        if item.get('reference') and not item.get('full_audio_verified'):
+            continue
+        key=(source,item.get('id') or item.get('url'))
+        if not key[1] or key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
 def host_of(url):
     try:
         parsed=urlsplit(url.strip())
@@ -100,6 +131,9 @@ class SourceIndex:
         with self.store.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS source_index(id TEXT PRIMARY KEY, source TEXT, metadata TEXT, updated REAL)')
             db.execute('CREATE TABLE IF NOT EXISTS source_formats(source TEXT, format TEXT, PRIMARY KEY(source,format))')
+            db.execute('''CREATE TABLE IF NOT EXISTS source_imports(
+                source TEXT NOT NULL, id TEXT NOT NULL, metadata TEXT NOT NULL,
+                added REAL NOT NULL, updated REAL NOT NULL, PRIMARY KEY(source,id))''')
             if not db.execute("SELECT 1 FROM library_options WHERE key='format_history_initialized'").fetchone():
                 for (raw,) in db.execute("SELECT metadata FROM files WHERE source_id LIKE 'ex:%'"):
                     track=json.loads(raw)
@@ -108,6 +142,62 @@ class SourceIndex:
                 db.execute("INSERT INTO library_options VALUES('format_history_initialized', 'true')")
         self.related_lock=threading.Lock()
         self.search_cache={}
+        # Upgrade previously saved pages once; retain every extracted reference.
+        with self.store.db() as db:
+            migrated=db.execute("SELECT 1 FROM library_options WHERE key='cumulative_html_v1'").fetchone()
+            legacy=db.execute("SELECT key,value FROM library_options WHERE key='home_html' OR key LIKE 'page:%'").fetchall() if not migrated else []
+        if not migrated:
+            for option,raw in legacy:
+                rows=json.loads(raw)
+                if isinstance(rows,list):
+                    self.merge_imports('youtube' if option=='home_html' else option[5:],rows)
+            self.sources.set_option('cumulative_html_v1',True)
+
+    def merge_imports(self,key,items):
+        """Add parsed musical metadata, never raw HTML, and preserve richer old fields."""
+        with self.store.lock,self.store.db() as db:
+            now=time.time()
+            for item in items:
+                if not isinstance(item,dict) or not item.get('id'):
+                    continue
+                old=db.execute('SELECT metadata FROM source_imports WHERE source=? AND id=?',(key,item['id'])).fetchone()
+                merged=json.loads(old[0]) if old else {}
+                merged.update({k:v for k,v in item.items() if v not in ('',None,[],{})})
+                # Keep the usual empty keys for consumers without erasing previous metadata.
+                for field in ('title','artist','cover'):
+                    merged.setdefault(field,item.get(field,''))
+                encoded=json.dumps(merged,ensure_ascii=False)
+                db.execute('''INSERT INTO source_imports VALUES(?,?,?,?,?) ON CONFLICT(source,id)
+                    DO UPDATE SET metadata=excluded.metadata,updated=excluded.updated''',
+                           (key,item['id'],encoded,now,now))
+
+    def imported_count(self,key):
+        with self.store.db() as db:
+            count=db.execute('SELECT COUNT(*) FROM source_imports WHERE source=?',(key,)).fetchone()[0]
+        return count or len(self.sources.option('home_html' if key=='youtube' else 'page:'+key,[]))
+
+    def imported(self,key,limit=250):
+        with self.store.db() as db:
+            total=db.execute('SELECT COUNT(*) FROM source_imports WHERE source=?',(key,)).fetchone()[0]
+            if total<=limit:
+                rows=db.execute('SELECT metadata FROM source_imports WHERE source=? ORDER BY updated DESC,id',(key,)).fetchall()
+            else:
+                # Keep recent additions visible and rotate through the archive daily.
+                recent=min(50,limit)
+                offset=(int(time.time()//86400)*(limit-recent))%(total-recent)
+                rows=db.execute('SELECT metadata FROM source_imports WHERE source=? ORDER BY updated DESC,id LIMIT ?',(key,recent)).fetchall()
+                tail=db.execute('SELECT metadata FROM source_imports WHERE source=? ORDER BY updated DESC,id LIMIT ? OFFSET ?',
+                                (key,limit-recent,recent+offset)).fetchall()
+                rows+=tail
+                if len(rows)<limit:
+                    rows+=db.execute('SELECT metadata FROM source_imports WHERE source=? ORDER BY updated DESC,id LIMIT ? OFFSET ?',
+                                     (key,limit-len(rows),recent)).fetchall()
+        return [json.loads(r[0]) for r in rows] if total else self.sources.option('home_html' if key=='youtube' else 'page:'+key,[])[:limit]
+
+    def clear_imports(self,key):
+        with self.store.lock,self.store.db() as db:
+            db.execute('DELETE FROM source_imports WHERE source=?',(key,))
+            db.execute('INSERT OR REPLACE INTO library_options VALUES(?,?)',('home_html' if key=='youtube' else 'page:'+key,'[]'))
 
     def active(self):
         removed=set(self.sources.option('removed_sources', []))
@@ -158,7 +248,8 @@ class SourceIndex:
         with self.store.lock:
             if key not in self.active():
                 raise UserError('La fuente se eliminó.')
-            self.sources.set_option('page:'+key,list(parser.items.values()))
+            self.merge_imports(key,list(parser.items.values()))
+            self.sources.set_option('page:'+key,self.imported(key))
         return {'imported':len(parser.items)}
 
     def indexed(self):
@@ -170,7 +261,7 @@ class SourceIndex:
         items=self.indexed()
         for key in self.active():
             if key!='youtube':
-                items.extend(self.sources.option('page:'+key,[]))
+                items.extend(self.imported(key))
         return items
 
     def get(self,ident):
@@ -188,8 +279,14 @@ class SourceIndex:
                 return cached[1]
         try:
             rows=self.run('', 'soundcloud.com', search=query)
-            items=[{'id':'ref:'+sha256(t['url'].encode()).hexdigest()[:32],'type':'song','source':'soundcloud.com',
-                    'reference':True,**t} for t in rows if provider(t['url'])=='soundcloud.com']
+            items=[]
+            for t in rows:
+                if provider(t['url'])!='soundcloud.com':
+                    continue
+                items.append({**t,'id':'ref:'+sha256(t['url'].encode()).hexdigest()[:32],
+                              'type':'song','source':'soundcloud.com','reference':True,
+                              'cover':self.store.catalog.cover([{'url':t.get('thumbnail','')}])})
+            items=clean_search_results(items,'songs')
         except UserError:
             items=[]
         with self.store.lock:
@@ -208,7 +305,7 @@ class SourceIndex:
                 args={'url':url,'search':search,'engine':engine,'cookies':cookie,'output':str(output) if output else None,'format':fmt}
                 with subprocess.Popen([sys.executable,'-I',str(Path(__file__).with_name('public_audio_worker.py'))],
                                       stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf8') as job:
-                    deadline=time.monotonic()+(420 if output else 7 if search else 24)
+                    deadline=time.monotonic()+(420 if output else 24)
                     payload=json.dumps(args)
                     while not self.store.stop_event.is_set() and time.monotonic()<deadline:
                         try:
@@ -220,6 +317,8 @@ class SourceIndex:
                         job.kill()
                         job.communicate()
                         raise UserError('La consulta se interrumpió o la fuente tardó demasiado en responder.')
+                if job.returncode==2:
+                    raise UserError('Esta fuente solo ofrece una muestra o audio restringido para esa pista. Buscá la canción completa en otra fuente.')
                 if job.returncode:
                     raise UserError('Esta fuente no ofreció audio descargable para ese enlace. Probá con una canción o un video público.')
                 return json.loads(result)
@@ -235,7 +334,11 @@ class SourceIndex:
             codec=info['ext'] if info['ext'] in ('mp3','aac','opus','vorbis','flac','wav') else ''
         track={'id':ident,'type':'song','source':key,'provider':title_for(key),'title':info['title'],'artist':info['artist'] or info['uploader'],
                'album':info['album'],'duration':info['duration'],'cover':self.store.catalog.cover([{'url':info.get('thumbnail','')}]),'native_format':info['native_lossless'] or codec,
-               'offered_formats':info.get('offered_formats',[]),'native_lossless':bool(info['native_lossless'])}
+               'offered_formats':info.get('offered_formats',[]),'native_lossless':bool(info['native_lossless']),
+               'full_audio_verified':info.get('full_audio_verified',False),'is_preview':info.get('is_preview',False),
+               'availability':info.get('availability','')}
+        if track['is_preview']:
+            raise UserError('La fuente solo ofrece una muestra de esta canción.')
         with self.store.lock,self.store.db() as db:
             if key in self.sources.option('removed_sources',[]):
                 raise UserError('La fuente se eliminó.')
@@ -253,13 +356,22 @@ class SourceIndex:
         if not url:
             raise UserError('Volvé a revisar el enlace antes de descargar.')
         raw=folder/'input.media'
-        self.run(url,provider(url),raw,fmt)
+        info=self.run(url,provider(url),raw,fmt)
+        if info.get('is_preview'):
+            raise UserError('La fuente solo ofrece una muestra de esta canción.')
         local=['-protocol_whitelist','file,pipe','-format_whitelist','mp3,flac,wav,mov,matroska,webm,ogg,aac,mpegts,asf,aiff,flv,avi']
-        probe=subprocess.run(['ffprobe','-v','error',*local,'-select_streams','a:0','-show_entries','stream=codec_name:format=format_name',
+        probe=subprocess.run(['ffprobe','-v','error',*local,'-select_streams','a:0','-show_entries','stream=codec_name:format=format_name,duration',
                               '-of','json',str(raw)],capture_output=True,text=True,timeout=15)
         if probe.returncode:
             raise UserError('No se pudo identificar el audio del enlace.')
         data=json.loads(probe.stdout)
+        try:
+            expected=float(info.get('duration') or 0)
+            actual=float(data.get('format',{}).get('duration') or 0)
+        except (ValueError,TypeError):
+            expected=actual=0
+        if expected>0 and actual>0 and expected-actual>max(3,expected*.05):
+            raise UserError('El audio recibido está incompleto. No se guardó como canción completa; probá otra fuente.')
         streams=data.get('streams') or [{}]
         native=native_audio(streams[0].get('codec_name'),data.get('format',{}).get('format_name'))
         if fmt=='flac' and native not in LOSSLESS or fmt not in ('mp3','flac') and native!=fmt:

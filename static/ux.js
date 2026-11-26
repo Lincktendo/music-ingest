@@ -161,10 +161,10 @@ const tourSteps=[
   {target:'[data-page="descargas"]',title:'Elegí cómo descargar',copy:'El icono de descarga del reproductor y Descargar en los tres puntos mandan la rola a segundo plano. Otro toque en el icono abre sus datos. Descargas permite cambiar entre lista y cuadrícula, editar metadatos y reintentar errores.'},
   {target:'[data-page="guardadas"]',title:'Tus favoritas, a un toque',copy:'En los tres puntos, tocá Agregar a Favoritas. El corazón del menú reúne tus rolas guardadas. También podés armar playlists nuevas o sumar a las que ya tenés.'},
   {target:'[data-page="playlists"]',title:'Traé tus playlists',copy:'Al importar una playlist podés agregarla también a tus playlists locales para escucharla aquí. Elegí descarga única o seguimiento de novedades.',owner:true},
-  {target:'[data-page="favoritos"]',title:'Seguí a tus artistas',copy:'Abrí la ficha de un artista para mantener su música al día. En Artistas podés revisar a quién seguís y ajustar las revisiones.',owner:true},
+  {target:'[data-page="favoritos"]',title:'Guardá tus artistas',copy:'El nombre de un artista abre su ficha. Tocá su corazón para guardarlo en Artistas. Si además querés recibir sus nuevas rolas, activá Mantener su música al día por separado.'},
   {target:'#add-source, [data-page="fuentes"]',title:'Elegí tus fuentes',copy:'En Fuentes, Agregar fuente conecta otra plataforma. Los tres puntos de cada fuente reúnen los formatos de audio, las sugerencias y la ayuda para importar tu página o tus cookies.',owner:true},
   {target:'#rotation-card, [data-page="perfil"]',title:'Renová tu biblioteca',copy:'En Ajustes, Rotación de música puede descargar hasta 20 rolas por vuelta. Elegí el intervalo y conectá Navidrome si querés conservar las favoritas y renovar el resto de la tanda.',owner:true},
-  {target:'.brand-icon',title:'Dale impulso al logo',copy:'Tocalo para ir a Inicio o arrastralo desde cualquier página. Se anima al escuchar música y se vuelve cromado mientras hay descargas pendientes.'},
+  {target:'.brand-icon',title:'Dale impulso al logo',copy:'Tocalo para ir a Inicio o arrastralo desde cualquier página. Se vuelve cromado mientras hay descargas pendientes.'},
   {target:'[data-page="perfil"]',title:'Volvé cuando lo necesités',copy:'La tuerca de arriba a la izquierda abre Ajustes. Ahí encontrás tu biblioteca activa, tu cuenta y el botón Ver recorrido. Podés volver a abrir esta guía desde ahí.'},
 ];
 

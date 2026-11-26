@@ -12,9 +12,4 @@
 .mobile-brand::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(125deg,#8ae4ec66,#a29ae988,#efb6da66,#b7e5bd66);background-size:240% 240%;mask:url('/static/brand/lincktendo.png') center/contain no-repeat;-webkit-mask:url('/static/brand/lincktendo.png') center/contain no-repeat;mix-blend-mode:color;opacity:0;transition:opacity .7s ease}
 .brand-download-active .mobile-brand::after{opacity:.7;animation:brand-reflections 8s ease-in-out infinite alternate}
 @keyframes brand-reflections{to{background-position:100% 100%}}
-.sidebar .brand-icon::after,.mobile-brand::before{content:"♪";position:absolute;right:-2px;bottom:0;z-index:2;font:700 12px/1 system-ui;color:#b9d7f1;pointer-events:none;opacity:0;transition:opacity .2s ease}
-.brand-playing .sidebar .brand-icon::after,.brand-playing .mobile-brand::before{opacity:.85}
-.brand-playing .sidebar .brand-icon,.brand-playing .mobile-brand{animation:brand-music-bob 1.35s ease-in-out infinite;transform-origin:center bottom}
-.brand-playing .sidebar .brand-icon.is-manipulating{animation-play-state:paused}
-@keyframes brand-music-bob{0%,100%{transform:translateY(0)}42%{transform:translateY(-2px)}56%{transform:translateY(-1px)}}
-@media(prefers-reduced-motion:reduce){.brand-download-active .mobile-brand::after,.brand-playing .sidebar .brand-icon,.brand-playing .mobile-brand{animation:none}}
+@media(prefers-reduced-motion:reduce){.brand-download-active .mobile-brand::after{animation:none}}

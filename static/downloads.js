@@ -236,7 +236,7 @@ const DownloadUI={
     const close=RecordCards.button('icon-button','×',()=>note.remove());close.setAttribute('aria-label','Cerrar notificación');
     note.append(open,close);const tray=$('download-notices');tray.prepend(note);
     while(tray.children.length>3)tray.lastElementChild.remove();
-    setTimeout(()=>note.remove(),succeeded?15000:30000);
+    setTimeout(()=>note.remove(),4000);
   },
   mountView(){
     if($('download-view'))return;

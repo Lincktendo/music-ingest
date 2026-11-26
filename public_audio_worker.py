@@ -1,6 +1,7 @@
 """Short-lived yt-dlp process for an untrusted public media URL. No web-app state."""
 import ipaddress
 import json
+import re
 from pathlib import Path
 import resource
 import socket
@@ -34,9 +35,46 @@ def lossless(f):
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from audio_formats import native_audio, LOSSLESS
 
+
+class PreviewOnlyError(ValueError):
+    pass
+
+
+def is_preview_format(item):
+    # Provider/extractor flags, not song length: a real interlude may be 29 seconds.
+    if item.get('is_preview') or item.get('snipped'):
+        return True
+    label=' '.join(str(item.get(k) or '') for k in ('format_id','format_note')).lower()
+    return bool(re.search(r'(?:^|[^a-z])(?:preview|snippet)(?:$|[^a-z])',label)
+                or re.search(r'/(?:preview/|(?:preview|playlist)/0/30/)',str(item.get('url') or '')))
+
+
+def available_audio(item):
+    return [f for f in item.get('formats') or [item]
+            if f.get('protocol') in ('https','http','m3u8_native') and not f.get('has_drm')
+            and f.get('acodec')!='none' and not is_preview_format(f)]
+
+
+def audio_metadata(item):
+    if item.get('is_preview') or item.get('availability') in ('premium_only','subscriber_only','needs_auth','private'):
+        raise PreviewOnlyError()
+    playable=available_audio(item)
+    if not playable:
+        raise PreviewOnlyError()
+    thumbs=[t for t in item.get('thumbnails') or [] if isinstance(t,dict) and t.get('url')]
+    image=max(thumbs,key=lambda t:(t.get('preference') or 0,t.get('width') or 0)).get('url') if thumbs else item.get('thumbnail','')
+    artist='; '.join(str(name) for name in item.get('artists') or [] if isinstance(name,str)) or item.get('artist') or item.get('uploader') or ''
+    return {k:str(item.get(k) or '')[:300] for k in ('title','uploader','album','duration','ext','acodec')} | {
+        'artist':str(artist)[:300],'thumbnail':str(image or '')[:4096],
+        'is_preview':False,'full_audio_verified':True,'availability':item.get('availability') or 'public',
+        'native_lossless':lossless(item), 'offered_formats':sorted({fmt for f in playable
+            if (fmt:=native_audio(f.get('acodec'),f.get('ext')))})}
+
 def select_audio(ctx, requested=None):
     formats = [f for f in ctx['formats'] if f.get('protocol') in ('https','http','m3u8_native')
-               and not f.get('has_drm') and f.get('acodec') != 'none']
+               and not f.get('has_drm') and f.get('acodec') != 'none' and not is_preview_format(f)]
+    if not formats and any(is_preview_format(f) for f in ctx['formats']):
+        raise PreviewOnlyError()
     if requested and requested!='mp3':
         wanted=LOSSLESS if requested=='flac' else {requested}
         matching=[f for f in formats if native_audio(f.get('acodec'),f.get('ext')) in wanted]
@@ -72,27 +110,33 @@ def run():
         if args.get('search'):
             result=ydl.extract_info('scsearch6:'+args['search'][:200],download=False)
             entries=[]
-            for t in result.get('entries') or []:
+            for t in list(result.get('entries') or [])[:3]:
                 address=t.get('permalink_url') or t.get('webpage_url') or t.get('url') or ''
                 if address.startswith(('https://soundcloud.com/','https://www.soundcloud.com/')) and t.get('title'):
-                    entries.append({'title':str(t['title'])[:200],'artist':str(t.get('uploader') or t.get('artist') or '')[:160],'url':address})
+                    try:
+                        checked=ydl.extract_info(address,download=False)
+                        if checked and checked.get('_type') not in ('playlist','multi_video') and not checked.get('is_live'):
+                            entries.append({**audio_metadata(checked),'url':address})
+                    except Exception:
+                        continue
             print(json.dumps(entries))
             return
         item=ydl.extract_info(args['url'],download=False)
         if not item or item.get('_type') in ('playlist','multi_video') or item.get('is_live') or (item.get('duration') or 0)>3600:
             raise ValueError('Single audio only')
+        metadata=audio_metadata(item)
         if result_file:
             ydl.process_info(item)
             if not Path(result_file).is_file():
                 raise ValueError('No file')
-        print(json.dumps({k:str(item.get(k) or '')[:300] for k in ('title','artist','uploader','album','duration','ext','acodec','thumbnail')}
-                         | {'native_lossless':lossless(item), 'offered_formats':sorted({fmt for f in item.get('formats') or [item]
-                            if not f.get('has_drm') and f.get('protocol') in ('http','https','m3u8_native')
-                            and (fmt:=native_audio(f.get('acodec'), f.get('ext')))})}))
+        print(json.dumps(metadata))
 
 
 if __name__=='__main__':
     try:
         run()
+    except PreviewOnlyError:
+        print(json.dumps({'error':'preview_only'}))
+        sys.exit(2)
     except Exception:
         sys.exit(1)

@@ -8,6 +8,8 @@ La tuerca de arriba a la izquierda abre **Ajustes**. Ahí elegís la biblioteca 
 
 En **Inicio** aparecen rolas con portada según tus páginas guardadas y los artistas que escuchaste o descargaste. Elegí **Todo**, **Separar por fuentes** o una plataforma. Desde la tarjeta podés abrir el artista o el álbum y ver el formato que se guardará.
 
+Los **HTML son acumulativos en todas las fuentes**: cada archivo suma referencias nuevas y actualiza las repetidas sin duplicarlas. Se conservan los datos musicales extraídos, no la página completa. Inicio muestra una selección de esa base y va rotando por las referencias anteriores. **Borrar referencias HTML** elimina explícitamente el historial importado de esa fuente.
+
 | Fuente | Cómo usarla |
 | --- | --- |
 | **YouTube Music · MP3** | Buscá directamente. Para traer sugerencias personales, cargá tus cookies de YouTube o guardá la página de Inicio desde tu navegador y tocá **Subir HTML** en la tarjeta. |
@@ -26,7 +28,7 @@ En **Stream**, tocá una portada para escuchar mientras navegás. Los **tres pun
 
 En modo **Descargar**, tocar la portada abre la ficha de la rola. También podés abrirla desde el ícono de descarga del reproductor. Revisá los datos y usá el lápiz para encuadrar la portada. **Descargar** muestra el porcentaje y te deja escuchar el archivo al terminar. **Mandar a cola** sigue en segundo plano y te avisa al finalizar. La pestañita verde indica que la rola ya está en Biblioteca. Podés volver a editar los datos y la portada desde ahí.
 
-El nombre del artista abre su ficha y el del disco abre el álbum. Para elegir varias rolas, abrí los tres puntos de una portada y tocá **Seleccionar**. En el celular, mantené presionada la primera portada. Luego tocá otras para sumarlas. Podés descargar la selección, ocultarla de Inicio o darle prioridad a sus artistas.
+El nombre del artista abre su ficha y el del disco abre el álbum. Tocá el **corazón del artista** para guardarlo en **Artistas**, identificado con una persona en el menú. Guardarlo no activa descargas automáticas. Para elegir varias rolas, abrí los tres puntos de una portada y tocá **Seleccionar**. En el celular, mantené presionada la primera portada. Luego tocá otras para sumarlas. Podés descargar la selección, ocultarla de Inicio o guardar a sus artistas.
 
 Al entrar por primera vez aparece un recorrido. Tocá **No volver a mostrar** para omitirlo en ese navegador. Podés repetirlo desde **Ajustes → Ver recorrido**.
 
@@ -93,7 +95,7 @@ En **Ajustes → Rotación de música**, activá tandas de hasta veinte cancione
 
 La [guía de instalación y conexión](NAVIDROME-Y-ROTACION.md) incluye Music Ingest solo y el proyecto conjunto con Navidrome.
 
-El logo de la barra lateral se puede arrastrar en Inicio para hacerlo girar. Un clic le da impulso y abre Inicio.
+El logo de la barra lateral se puede arrastrar desde cualquier sección para hacerlo girar. Un clic le da impulso y abre Inicio. Los iconos de fuente sobre las portadas usan el color de su plataforma. SoundCloud es opcional y se agrega desde **Fuentes → Agregar fuente**.
 
 ## Novedades del reproductor
 

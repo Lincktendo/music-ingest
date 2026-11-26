@@ -17,7 +17,7 @@ const guideData = {
   html: {
     title:'Importar tu Inicio guardado',
     steps:[['Cargá tus recomendaciones','En un navegador de computadora, abrí Inicio en music.youtube.com y bajá un poco para que aparezcan más recomendaciones.'], ['Guardá la página','Presioná Ctrl + S (⌘ + S en Mac). Elegí «Página web, completa» y guardá el archivo .html.'], ['Importá el archivo .html','En Inicio → YouTube Music, tocá «Subir HTML». Elegí el archivo .html que guardaste.']],
-    note:'Tu página guardada conserva las recomendaciones de ese momento. Para renovarlas, podés importar otra copia.',
+    note:'Cada HTML suma referencias a las anteriores. Las repetidas se actualizan sin duplicarse; conservamos solo datos musicales, no la página completa.',
     link:'https://music.youtube.com/', label:'Abrir YouTube Music ↗'
   }
 };
@@ -25,7 +25,7 @@ const guideData = {
 guideData.qhtml={
   title:'Importar una página de Qobuz',
   steps:[['Abrí una página de música','En la computadora, abrí en Qobuz una página que muestre enlaces a pistas o álbumes.'],guideData.html.steps[1],['Elegí el HTML de Qobuz','En Inicio → Qobuz, tocá «Subir HTML» y elegí el archivo .html que guardaste.']],
-  note:'El HTML agrega referencias a Inicio. Para guardar audio, Qobuz tiene que ofrecerte el archivo de esa pista.',
+  note:'Los HTML se acumulan sin duplicados. Para guardar audio, Qobuz tiene que ofrecerte el archivo de esa pista.',
   link:'https://www.qobuz.com/',label:'Abrir Qobuz ↗'
 };
 const SourceGuide = {
@@ -239,7 +239,7 @@ const SourceUI = {
         if(!rows.length||rows.some(line=>!valid.includes(line.split('\t')[0].replace(/^\./,'').toLowerCase())))throw Error('Exportá solo las cookies del sitio elegido en formato Netscape (.txt).');
       }
       const data=await api(html?'/api/sources/home-html':'/api/sources/'+kind+'/cookies',{method:'PUT',body:JSON.stringify({content})});
-      if(html)return 'Se importaron '+data.imported+' elementos.';
+      if(html)return data.imported+' referencias revisadas. Se suman a las anteriores, sin duplicados.';
       if(kind==='qobuz'&&epoch===this.epoch) {
         status('source-status','Sesión guardada. Buscando tus pistas…');
         return this.scan('');

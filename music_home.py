@@ -46,7 +46,7 @@ def album_art(url):
     dims = re.search(r'=w(\d+)-h(\d+)',url)
     if dims and dims[1] != dims[2]:
         return ''
-    return re.sub(r'=w\d+-h\d+', '=w640-h640', public_thumbnail(url), count=1)
+    return Catalog.cover_variants(public_thumbnail(url))[0]
 
 
 def public_thumbnail(value):
