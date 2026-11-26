@@ -12,12 +12,12 @@ const Profile = {
   },
   forgetKey(){ $('key-value').value=''; $('new-key').hidden=true; },
   reset(){
-    this.revision++; window.RecordUX?.reset();window.RotationUI?.reset();window.DownloadUI?.reset();window.ListeningCollection?.reset();
+    this.revision++; window.HomeRecommendations?.reset();window.RecordMenus?.close(false);window.RecordUX?.reset();window.RotationUI?.reset();window.DownloadUI?.reset();window.ListeningCollection?.reset();
     if(this.user&&this.library)window.ListeningCollection?.load();window.RecordCards?.reset(); window.CoverEditor?.reset(); window.Discovery?.reset(); $('advanced-settings').open=false; $('engine-version').textContent='…'; $('engine-checked').textContent='…'; $('engine-status').textContent=''; window.SourceUI?.reset(); window.MediaUI?.reset(); window.Selection?.reset(); window.Navigation?.refresh(); window.AutomationUI?.reset(); this.proposalsKey=null; this.forgetKey(); closeSuggestions(); state.search++; state.previewRequest++;
     window.Artists?.close(); $('search-submit').disabled=false;
     $('query').value=''; $('results').replaceChildren();
     state.jobsKey=''; state.completedJobs=null; state.libraryKey=''; state.preview=null; state.selected.clear();
-    $('preview-dialog').close(); $('queue-count').hidden=true;
+    $('preview-dialog').close(); $('queue-count').hidden=true;window.dispatchEvent(new CustomEvent('music-ingest:downloads-state',{detail:{active:0}}));
     for(const id of ['jobs','library','members','keys','proposals','providers'])$(id).replaceChildren();
     for(const id of ['profile-status','jobs-status','library-status','preview-status'])status(id,'');
     $('owner-settings').hidden=true; $('enqueue').textContent=this.owner()?'Guardar en mi biblioteca':'Proponer a esta biblioteca';

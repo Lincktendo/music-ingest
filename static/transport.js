@@ -55,7 +55,7 @@ const Transport = (() => {
   const seekBox=el('div','transport-timeline');seekBox.append(progress,times);
   box.append(previous,toggle,next,seekBox,controls);
   audio.after(box);audio.controls=false;audio.hidden=true;
-  let dragging=false,counted=false,sequence=0,pending=false;
+  let dragging=false,counted=false,sequence=0,pending=false,lastState='';
   function selectedDuration(){
     const t=MediaUI.playing;
     if(!t)return 0;
@@ -80,6 +80,11 @@ const Transport = (() => {
     describe(mute,silent?'Activar sonido':'Silenciar',silent?'mute':'volume');
     toggle.setAttribute('aria-busy',String(pending));
     box.classList.toggle('is-buffering',pending);
+    const playing=!!MediaUI.playing&&!audio.paused&&!audio.ended&&!audio.error&&!pending,
+      loading=!!MediaUI.playing&&pending&&!audio.error,key=String(playing)+String(loading);
+    if(key!==lastState){
+      lastState=key;window.dispatchEvent(new CustomEvent('music-ingest:playback-state',{detail:{playing,loading}}));
+    }
   }
   progress.oninput=()=>{dragging=true;paint();};
   progress.onchange=()=>{
@@ -93,6 +98,7 @@ const Transport = (() => {
   audio.addEventListener('waiting',()=>{pending=!audio.paused;paint();});
   audio.addEventListener('stalled',()=>{pending=!audio.paused&&audio.readyState<3;paint();});
   audio.addEventListener('pause',()=>{pending=false;paint();});
+  audio.addEventListener('emptied',()=>{pending=!!MediaUI.playing&&!!audio.getAttribute('src');paint();});
   audio.addEventListener('playing',()=>{
     pending=false;paint();
     if(!counted&&MediaUI.playing){counted=true;window.ListeningCollection?.played(MediaUI.playing);}

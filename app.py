@@ -17,6 +17,8 @@ from source_catalog import provider, EXID
 from qobuz_store import QID
 from download_tools import install_download_tools
 from rotation import install_rotation
+from recommendations import install_recommendations, record_search
+from playlist_imports import install_imports
 from listening_collection import install_collection
 from listening import install_listening
 from source_routes import install_sources
@@ -30,7 +32,7 @@ from account_routes import install_account_routes
 from automation import PLAYLIST_ID, Following, install as install_following
 
 log = logging.getLogger('music_ingest')
-VERSION = '0.11.0'
+VERSION = '0.12.0'
 data = Path(os.environ.get('DATA_DIR', '/data'))
 music = Path(os.environ.get('MUSIC_DIR', '/music'))
 catalog = Catalog(data)
@@ -76,9 +78,11 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed or ['localhost',
 identity, access = install_account_routes(app, accounts, registry, catalog, integrations)
 install_following(app, access, registry, following)
 rotation = install_rotation(app, access, registry)
+install_recommendations(app, access, registry, rotation)
 install_sources(app, access, registry)
 install_listening(app, access, registry)
 install_collection(app, access, registry)
+install_imports(app, access, registry, following)
 install_download_tools(app, access, registry)
 
 
@@ -174,11 +178,13 @@ def engine_status(request: Request, library: str | None = None):
 
 @app.get('/api/search')
 def search(request: Request, q: str = '', kind: Literal['songs', 'albums', 'artists'] = 'songs', library: str | None = None):
-    _, lib = access(request, library, allow_key=True)
+    actor, lib = access(request, library, allow_key=True)
     sources = registry.get(lib['id']).sources
     q = q.strip()
     if not 2 <= len(q) <= 200:
         raise UserError('Escribí entre 2 y 200 caracteres para buscar.')
+    if actor['kind']=='user':
+        record_search(registry.get(lib['id']), actor['id'], q)
     muted=set(sources.option('muted_search',[])) | set(sources.option('removed_sources',[]))
     purchases=[]
     if 'qobuz' not in muted:

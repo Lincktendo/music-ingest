@@ -54,6 +54,8 @@ class ListeningCollection:
             ''')
 
     def lists(self, uid):
+        from playlist_imports import sync_imports
+        sync_imports(self.store, uid)
         with self.store.db() as db:
             playlists = db.execute('''SELECT l.id,l.name,COUNT(e.track) AS count
                 FROM listening_lists l LEFT JOIN listening_entries e ON l.id=e.list_id AND l.user=e.user
@@ -153,6 +155,8 @@ class ListeningCollection:
                 db.execute('DELETE FROM listening_entries WHERE user=? AND list_id=? AND track=?', (uid, key, ident))
 
     def page(self, uid, key, offset, limit=50, shuffle=False, exclude=(), after=None):
+        from playlist_imports import sync_imports
+        sync_imports(self.store, uid)
         with self.store.db() as db:
             self.check_list(db, uid, key)
             order = 'added DESC,track' if key == FAVORITES else 'added,track'

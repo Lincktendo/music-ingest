@@ -1,8 +1,10 @@
 # Music Ingest: guía rápida
 
-## Inicio y calidad de audio
+## Inicio, Fuentes y calidad de audio
 
 Usá la barra de arriba desde cualquier pantalla para buscar por nombre o pegar un enlace de canción, artista, álbum o playlist de YouTube Music. Para extraer el audio de un video, pegá su enlace directamente. Por defecto busca en YouTube Music (Google). Al agregar otras fuentes también podés buscar entre sus títulos importados y los enlaces que ya revisaste. En **Ajustes → Fuentes de búsqueda** elegís cuáles aparecen en los resultados.
+
+La tuerca de arriba a la izquierda abre **Ajustes**. Ahí elegís la biblioteca activa y administrás tu cuenta. **Fuentes** tiene su propia sección en el menú: las conexiones ya no están al final de Inicio.
 
 En **Inicio** aparecen rolas con portada según tus páginas guardadas y los artistas que escuchaste o descargaste. Elegí **Todo**, **Separar por fuentes** o una plataforma. Desde la tarjeta podés abrir el artista o el álbum y ver el formato que se guardará.
 
@@ -20,11 +22,11 @@ Music Ingest también guarda archivos en tu servidor. Navidrome puede leer esa m
 
 ## Escuchar y elegir
 
-En **Stream**, tocá una portada para escuchar mientras navegás. El corazón guarda la rola en **Favoritas y playlists**, que encontrás en Playlists o Biblioteca. El botón **Agregar a playlist** del reproductor te permite armar tus listas. Para ver qué va a sonar después, tocá **Ver próximas rolas**.
+En **Stream**, tocá una portada para escuchar mientras navegás. Los **tres puntos → Agregar a Favoritas** guardan la rola en **Favoritas**, accesible desde el corazón del menú. También podés abrir tus listas desde Playlists o Biblioteca. El botón **Agregar a playlist** del reproductor te permite armar tus listas. Para ver qué va a sonar después, tocá **Ver próximas rolas**: la lista se despliega sobre el reproductor, sin bloquear la pantalla. Desde Favoritas se carga la colección completa: la elegida primero y el resto desde la más reciente. Auto DJ muestra hasta diez sugerencias y repone la cola mientras escuchás.
 
 En modo **Descargar**, tocar la portada abre la ficha de la rola. También podés abrirla desde el ícono de descarga del reproductor. Revisá los datos y usá el lápiz para encuadrar la portada. **Descargar** muestra el porcentaje y te deja escuchar el archivo al terminar. **Mandar a cola** sigue en segundo plano y te avisa al finalizar. La pestañita verde indica que la rola ya está en Biblioteca. Podés volver a editar los datos y la portada desde ahí.
 
-El nombre del artista abre su ficha y el del disco abre el álbum. Para elegir varias rolas, acercá el mouse a la esquina superior izquierda de una portada y marcá la casilla. En el celular, mantené presionada la primera portada. Luego tocá otras para sumarlas. Podés descargar la selección, ocultarla de Inicio o darle prioridad a sus artistas.
+El nombre del artista abre su ficha y el del disco abre el álbum. Para elegir varias rolas, abrí los tres puntos de una portada y tocá **Seleccionar**. En el celular, mantené presionada la primera portada. Luego tocá otras para sumarlas. Podés descargar la selección, ocultarla de Inicio o darle prioridad a sus artistas.
 
 Al entrar por primera vez aparece un recorrido. Tocá **No volver a mostrar** para omitirlo en ese navegador. Podés repetirlo desde **Ajustes → Ver recorrido**.
 
@@ -75,7 +77,7 @@ La carpeta debe existir y ser escribible para `10001:10001` en Linux. Music Inge
 - Cada instalación empieza vacía. Letras y géneros dependen de que los proveedores tengan una coincidencia; las claves opcionales las crea y configura cada usuario. [Cómo configurar integraciones](../INTEGRATIONS.md).
 - Dejar de seguir una playlist o artista no borra lo descargado. Cambiar carpeta no mueve canciones anteriores. Respaldá configuración y música antes de actualizar o reorganizar archivos.
 
-En **Inicio**, los **tres puntos → Ayuda** de cada fuente dan acceso a tres pasos con una demostración del mouse. Podés avanzar a tu ritmo o elegir la imagen fija. La ayuda de Qobuz incluye el enlace opcional de su tienda. Music Ingest es gratis.
+En **Fuentes**, los **tres puntos → Ayuda** de cada fuente dan acceso a tres pasos con una demostración del mouse. Podés avanzar a tu ritmo o elegir la imagen fija. La ayuda de Qobuz incluye el enlace opcional de su tienda. Music Ingest es gratis.
 
 En **Ajustes → Usuarios avanzados** podés consultar el estado de yt-dlp, las carpetas de Docker y las conexiones de IA. El servidor revisa yt-dlp una vez al día por su cuenta.
 
@@ -92,3 +94,15 @@ En **Ajustes → Rotación de música**, activá tandas de hasta veinte cancione
 La [guía de instalación y conexión](NAVIDROME-Y-ROTACION.md) incluye Music Ingest solo y el proyecto conjunto con Navidrome.
 
 El logo de la barra lateral se puede arrastrar en Inicio para hacerlo girar. Un clic le da impulso y abre Inicio.
+
+## Novedades del reproductor
+
+El icono de descarga del miniplayer manda la rola a segundo plano; un segundo toque abre sus datos. Los tres puntos de cada tarjeta ofrecen descarga, favorita, reproducir a continuación, agregar a cola, abrir álbum y agregar a playlist. El distintivo verde indica que ya existe en tu biblioteca.
+
+En **Descargas** elegís lista o cuadrícula y editás los metadatos de archivos terminados. Para varios artistas escribí `Artista uno; Artista dos`.
+
+Al importar una playlist podés marcar **También agregar a mis playlists locales**. Su contenido aparecerá al terminar la revisión y se incorpora al abrir las listas.
+
+La barra de búsqueda muestra las consultas de texto recientes con opción de borrarlas; los enlaces no entran al historial. Inicio separa canciones y álbumes. Los géneros usan tu conexión configurada con Navidrome, si está disponible.
+
+En **Ajustes → Usuarios avanzados → Recomendaciones** podés personalizar los pesos del algoritmo mediante JSON. Vacío conserva el comportamiento predeterminado. Ese campo no ejecuta código.

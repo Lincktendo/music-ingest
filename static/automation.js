@@ -52,10 +52,15 @@ window.AutomationUI=AutomationUI;
 $('playlist-form').addEventListener('submit',async event=>{
   event.preventDefault();const button=event.submitter||$('playlist-submit'),revision=Profile.revision;
   const mode=document.querySelector('[name="playlist-mode"]:checked');if(!mode)return;
+  const local=$('playlist-local').checked;
   button.disabled=true;status('playlist-feedback','Agregando tu playlist…');
   try{const result=await post('/api/following',{kind:'playlist',source:$('playlist-url').value.trim(),follow_updates:mode.value==='follow'});
+    if(revision!==Profile.revision)return;
+    let localNotice='';
+    if(local){try{await post('/api/listening/import',{follow_id:result.id});if(revision!==Profile.revision)return;await ListeningCollection.load();localNotice=' También está en tus playlists locales; las rolas aparecerán al terminar la revisión.';}catch(error){localNotice=' La descarga quedó programada, pero no se pudo guardar la playlist local: '+error.message;}}
     if(revision!==Profile.revision)return;$('playlist-form').reset();button.textContent='Agregar playlist';await AutomationUI.load();
     status('playlist-feedback',result.already_following?'Esta playlist ya está en tu lista. Conservamos la opción que habías elegido.':result.follow_updates?'Listo: descargamos las canciones de ahora y buscamos las nuevas automáticamente.':'Listo: descargamos las canciones que tiene ahora, una sola vez.');
+    $('playlist-feedback').textContent+=localNotice;
   }catch(e){status('playlist-feedback',e.message,true);}finally{button.disabled=false;}
 });
 document.querySelectorAll('[name="playlist-mode"]').forEach(input=>input.addEventListener('change',()=>{$('playlist-submit').textContent=input.value==='follow'?'Descargar y mantener al día':'Descargar una vez';}));

@@ -2,13 +2,14 @@
 import threading
 import time
 
-from core import VIDEO_ID
+from core import VIDEO_ID, ALBUM_ID
 from music_home import ATV, album_art
 
 
 def recording(raw):
-    thumb=album_art(raw.get('thumbnail') or '') if raw.get('type','song')=='song' else ''
-    if raw.get('video_type')==ATV and thumb:
+    thumb=album_art(raw.get('thumbnail') or '')
+    album=raw.get('type')=='album' and ALBUM_ID.fullmatch(raw.get('id',''))
+    if thumb and (album or raw.get('type','song')=='song' and raw.get('video_type')==ATV):
         return {**raw,'thumbnail':thumb}
     return None
 
@@ -54,8 +55,15 @@ class HomeRecordings:
         for section in sections:
             matches=[]
             for row in section['items']:
+                if row.get('source','youtube')=='youtube' and row.get('type')=='album':
+                    result=recording(row)
+                    if result:
+                        item={**result,'cover':self.sources.store.catalog.cover([{'url':result['thumbnail']}])}
+                        item.pop('thumbnail',None)
+                        matches.append(item)
+                    continue
                 if row.get('source','youtube')!='youtube' or not VIDEO_ID.fullmatch(row.get('id','')):
-                    if row.get('source','youtube')!='youtube' and row.get('type','song')=='song' and row.get('cover') and row.get('source') not in ('vimeo.com','dailymotion.com'):
+                    if row.get('source','youtube')!='youtube' and row.get('type','song') in ('song','album') and row.get('cover') and row.get('source') not in ('vimeo.com','dailymotion.com'):
                         matches.append(row)
                     continue
                 if row.get('type','song')!='song':

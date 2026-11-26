@@ -15,7 +15,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Test player and Auto DJ
-        run: node --test tests/auto-dj.test.cjs
+        run: node --test tests/*.test.cjs
       - name: Build clean image
         run: docker build --platform linux/amd64 -t music-ingest:check .
       - name: Test without personal data

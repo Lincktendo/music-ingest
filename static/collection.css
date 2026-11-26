@@ -3,12 +3,6 @@
 .listening-icon:hover,.listening-icon:focus-visible,.listening-icon.active{color:var(--text);background:#283140}
 .listening-icon.active{color:var(--accent)}.listening-icon.liked{color:#ff91aa}
 .listening-icon.liked svg{fill:currentColor;stroke:currentColor}
-.record-picture .record-heart{position:absolute;bottom:7px;right:7px;width:29px;height:29px;z-index:1;color:#fff;background:#111722d9;opacity:0}
-.record-picture:hover .record-heart,.record-picture:focus-within .record-heart,.record-picture .record-heart.liked{opacity:1}
-.record-picture .record-heart.liked{color:#ff91aa}
-.record-picture .record-menu{position:absolute;z-index:1;bottom:7px;right:42px;width:29px;height:29px;background:#111722d9;color:white;opacity:0}
-.record-picture:hover .record-menu,.record-picture:focus-within .record-menu{opacity:1}
-.record-menu svg{stroke-width:3}
 .dj-field{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding:9px 0}
 .dj-field:last-child{border-bottom:0}
 .dj-field select{width:auto;max-width:57%}
@@ -23,6 +17,7 @@
 .collection-player-actions{display:flex;align-items:center;gap:2px}
 .listening-shelf{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;margin-bottom:12px;border-bottom:1px solid var(--line)}
 .listening-shelf h2{margin:0}
+.favorite-page-action{display:block;margin:22px auto 0}
 .listening-dialog{width:min(490px,94vw);max-height:83dvh}
 .listening-dialog .dialog-top{position:sticky;top:0;background:var(--panel);z-index:1}
 .listening-dialog-body{display:grid;gap:8px;padding-top:4px}
@@ -34,7 +29,6 @@
 .listening-pick{display:flex;align-items:center;gap:10px;min-width:0;flex:1;padding:3px}
 .listening-pick .cover{width:44px;height:44px;flex:none;border-radius:7px;overflow:hidden}
 .listening-row-copy{display:grid;min-width:0}.listening-row-copy>*{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.listening-row-copy small{color:var(--muted)}
-@media(hover:none){.record-picture .record-heart,.record-picture .record-menu{opacity:1}}
 @media(max-width:640px){.collection-player-actions .listening-icon{width:32px;height:32px}}
 
 .dj-field select{appearance:auto;min-height:34px;border:1px solid #343d49;border-radius:7px;background:#171d25;color:var(--text);padding:5px 8px}
@@ -46,5 +40,15 @@
 .continuous-switch i::before{content:'';position:absolute;width:12px;height:12px;background:#e4edfa;top:2px;left:2px;border-radius:50%;transition:transform .15s}
 .continuous-switch[aria-checked=true] i{background:#477fca}
 .continuous-switch[aria-checked=true] i::before{transform:translateX(11px)}
-.dj-open{border:0;background:none;padding:6px;color:var(--muted);font-size:11px;white-space:nowrap}
+.dj-open{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:6px;color:var(--muted);font-size:11px;font-weight:650;white-space:nowrap}
 .dj-open.active{color:#a6cdff}.dj-open:hover{background:#283140;border-radius:6px}
+.dj-indicator{border:1px solid #647081;color:#b4beca;border-radius:4px;padding:2px 4px;font-size:9px;line-height:1}
+.dj-open.active .dj-indicator{border-color:#568caa;background:#253e4d;color:#c5ecff}
+.queue-pane{position:absolute;right:0;bottom:calc(100% + 8px);box-sizing:border-box;display:flex;flex-direction:column;gap:5px;width:min(420px,100%);max-height:min(51dvh,430px);padding:12px;border-radius:14px;background:#161b23;color:var(--text);border:1px solid #455267;box-shadow:0 8px 32px #0008}
+.queue-pane[hidden],.queue-hint[hidden]{display:none}
+.queue-head{display:flex;align-items:center;gap:8px}.queue-head>strong{font-size:.92rem}.queue-head .listening-icon{margin-left:auto}
+.queue-head>span,.queue-hint{color:var(--muted);font-size:.73rem}
+.queue-scroll{overflow:auto;min-height:0;overscroll-behavior:contain;scrollbar-width:thin}
+.queue-scroll .queue-row{height:46px;box-sizing:border-box;gap:3px;padding:3px 0}
+.queue-pane .listening-pick .cover{width:34px;height:34px}
+.queue-pane .listening-row-copy strong{font-size:.8rem}.queue-pane .listening-row-copy small{font-size:.71rem}

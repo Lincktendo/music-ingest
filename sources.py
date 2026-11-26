@@ -148,24 +148,34 @@ class Sources:
             self.set_option('home_html', items)
         return {'imported': len(items)}
 
-    def home(self, refresh=False):
+    def refresh_home(self, rows, revision):
+        try:
+            items = live_home(rows, self.store.catalog)
+            with self.store.lock:
+                if revision == self.option('youtube_revision') and not self.store.stop_event.is_set():
+                    self.set_option('home_live', {'time': time.time(), 'items': items})
+        except Exception:
+            with self.store.lock:
+                if revision == self.option('youtube_revision'):
+                    cache = self.option('home_live', {})
+                    self.set_option('home_live', {**cache, 'time': time.time()-1500,
+                        'warning': 'YouTube Music no pudo actualizar tu Inicio. Revisá tus cookies o importá el HTML.'})
+        finally:
+            self.home_lock.release()
+
+    def home(self, refresh=False, uid=None):
         warning = ''
         with self.store.lock:
             revision = self.option('youtube_revision')
             rows = self.vault.read('youtube')
             cache = self.option('home_live', {})
         if rows and (refresh or time.time() - cache.get('time', 0) > 1800) and self.home_lock.acquire(False):
-            try:
-                items = live_home(rows, self.store.catalog)
-                with self.store.lock:
-                    if revision != self.option('youtube_revision'):
-                        raise UserError('La sesión cambió. Actualizá el Inicio.')
-                    cache = {'time': time.time(), 'items': items}
-                    self.set_option('home_live', cache)
-            except UserError as error:
-                warning = str(error)
-            finally:
-                self.home_lock.release()
+            if uid is not None:
+                threading.Thread(target=self.refresh_home,args=(rows,revision),daemon=True,name='home-session').start()
+            else:
+                self.refresh_home(rows,revision)
+                cache=self.option('home_live', {})
+        warning=cache.get('warning','')
         sections = []
         if rows and revision == self.option('youtube_revision') and cache.get('items'):
             sections.append({'title': 'Para vos en YouTube Music', 'items': cache['items']})
@@ -178,12 +188,16 @@ class Sources:
         extras+=self.index.rows()
         if extras:
             sections.append({'title':'De tus fuentes','items':extras})
-        related=self.related(refresh)
+        if uid is not None:
+            from recommendations import for_store
+            related, related_checking=for_store(self.store).related(uid,refresh)
+        else:
+            related, related_checking=self.related(refresh),False
         if related:
             sections.insert(0,{'title':'Por lo que escuchás y descargás','items':related})
         hidden=set(self.option('hidden_home',[]))
         favorites=self.option('favorite_artists',[])
-        checking=self.recordings.sections(sections)
+        checking=self.recordings.sections(sections) or related_checking or self.home_lock.locked()
         prefs=self.option('source_preferences',{})
         for section in sections:
             visible=[t for t in section['items'] if prefs.get((t.get('source') or ('qobuz' if t['id'].startswith(('qb:','qa:')) else 'youtube')),{}).get('home',True)]

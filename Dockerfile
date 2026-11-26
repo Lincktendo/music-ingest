@@ -3,7 +3,7 @@ FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb
 LABEL org.opencontainers.image.source="https://github.com/Lincktendo/music-ingest" \
       org.opencontainers.image.title="Music Ingest" \
       org.opencontainers.image.licenses="GPL-3.0-or-later" \
-      org.opencontainers.image.version="0.11.0"
+      org.opencontainers.image.version="0.12.0"
 COPY --from=deno /deno /usr/local/bin/deno
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates gpgv && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 music && useradd --uid 10001 --gid music --no-create-home music \
@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY tools/image_inventory.py /tmp/image_inventory.py
 RUN python /tmp/image_inventory.py && rm /tmp/image_inventory.py
 COPY tools/yt-dlp-release-public.gpg /usr/local/share/music-ingest/yt-dlp-release-public.gpg
-COPY rotation.py download_tools.py listening_collection.py listening.py home_recordings.py audio_formats.py extractor_updates.py app.py core.py accounts.py account_routes.py integrations.py automation.py storage.py source_sessions.py qobuz_store.py music_home.py sources.py source_catalog.py public_audio_worker.py source_routes.py /app/
+COPY playlist_imports.py recommendations.py rotation.py download_tools.py listening_collection.py listening.py home_recordings.py audio_formats.py extractor_updates.py app.py core.py accounts.py account_routes.py integrations.py automation.py storage.py source_sessions.py qobuz_store.py music_home.py sources.py source_catalog.py public_audio_worker.py source_routes.py /app/
 COPY static /app/static
 COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 DATA_DIR=/data MUSIC_DIR=/music HOME=/tmp

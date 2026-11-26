@@ -6,7 +6,7 @@ Esta guía explica cómo usa Music Ingest los proveedores de letras y géneros y
 
 Solo el propietario puede abrir y cambiar los proveedores de su biblioteca en Ajustes → Usuarios avanzados. Las demás bibliotecas tienen ajustes independientes. Los campos de contraseña aparecen vacíos aunque ya exista una clave: dejarlos vacíos conserva la clave guardada; marcar «Eliminar la clave guardada» la borra.
 
-La configuración indica si guardaste una clave. Music Ingest guarda las claves de los proveedores en archivos privados de cada biblioteca dentro del volumen persistente `data`, con permisos `0600` en Linux y sin cifrado en reposo. Si querés conectar una fuente con tus cookies, subí vos el archivo desde su tarjeta en Inicio.
+La configuración indica si guardaste una clave. Music Ingest guarda las claves de los proveedores en archivos privados de cada biblioteca dentro del volumen persistente `data`, con permisos `0600` en Linux y sin cifrado en reposo. Si querés conectar una fuente con tus cookies, subí vos el archivo desde su tarjeta en Fuentes.
 
 Cuando una integración está activa, se envían al proveedor los datos necesarios de la canción, como título, artista, álbum y duración. No se envían las cuentas de Music Ingest ni los archivos de audio. Las respuestas se guardan temporalmente en memoria para reducir consultas.
 

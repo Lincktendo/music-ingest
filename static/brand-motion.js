@@ -3,12 +3,25 @@
 // A small solid model of Lincktendo's four pillars, rendered locally with alpha.
 // The favicon continues to use the existing static image.
 (() => {
+  window.addEventListener('music-ingest:playback-state',event=>{
+    const playing=event.detail?.playing===true && event.detail?.loading!==true;
+    document.body.classList.toggle('brand-playing',playing);
+  });
+  let latestDownloads = 0, updateModel = null;
+  window.addEventListener('music-ingest:downloads-state',event=>{
+    const count=Number(event.detail?.active);
+    latestDownloads=Number.isFinite(count) ? Math.max(0,Math.floor(count)) : 0;
+    document.body.classList.toggle('brand-download-active',latestDownloads>0);
+    const mobile=document.querySelector('.mobile-brand');
+    if(mobile) mobile.title=latestDownloads>0 ? 'Descargas en curso' : '';
+    updateModel?.(latestDownloads);
+  });
   const link = document.querySelector('.sidebar .brand');
   const holder = link?.querySelector('.brand-icon');
   if (!holder) return;
   const canvas = document.createElement('canvas');
   canvas.className = 'brand-motion';
-  canvas.setAttribute('aria-label', 'Ir a Inicio. En Inicio, arrastrá el logo para girarlo.');
+  canvas.setAttribute('aria-label', 'Tocá para ir a Inicio. Arrastrá el logo para girarlo.');
   canvas.setAttribute('role', 'button');
   canvas.tabIndex = 0;
   holder.removeAttribute('aria-hidden');
@@ -63,18 +76,40 @@
     uniform mat3 rotation;
     uniform vec2 fit;
     varying vec3 shaded;
+    varying vec3 surfaceNormal;
+    varying vec3 surfacePosition;
     void main() {
       vec3 p = rotation * position;
       vec3 n = rotation * normal;
       float light = .78 + .22 * max(dot(n, normalize(vec3(-.3,.7,1.))),0.);
       shaded = color * light;
+      surfaceNormal = n;
+      surfacePosition = p;
       gl_Position = vec4(p.xy * fit, -p.z * .18, 1.);
     }`;
   const fragmentSource = `
     precision mediump float;
     varying vec3 shaded;
-    void main() { gl_FragColor = vec4(shaded,1.); }`;
-  let program, buffer, rotationLocation, fitLocation;
+    varying vec3 surfaceNormal;
+    varying vec3 surfacePosition;
+    uniform float charge;
+    uniform float shimmerTime;
+    void main() {
+      vec3 n = normalize(surfaceNormal);
+      vec3 reflection = reflect(vec3(0.,0.,-1.),n);
+      // Broad studio reflections and narrow highlights keep each flat face legible.
+      float sweep = reflection.y * 5.4 + surfacePosition.y * .75;
+      float softBand = .5 + .5 * sin(sweep + reflection.x * 2.2);
+      float sharpBand = pow(.5 + .5 * sin(sweep * 1.7 + shimmerTime * .3),16.);
+      float rim = pow(1. - abs(n.z),3.);
+      vec3 silver = mix(vec3(.075,.10,.16),vec3(.70,.76,.83),softBand);
+      float angle = reflection.x * 3.2 + reflection.z * 2.4 + surfacePosition.y * .28 + shimmerTime * .22;
+      vec3 spectrum = .5 + .5 * cos(angle + vec3(0.,2.094,4.188));
+      vec3 chrome = silver + (spectrum-.5) * (.12 + .1 * rim);
+      chrome += vec3(.70,.76,.83) * sharpBand * .56 + spectrum * rim * .10;
+      gl_FragColor = vec4(mix(shaded,clamp(chrome,0.,1.),charge),1.);
+    }`;
+  let program, buffer, rotationLocation, fitLocation, chargeLocation, shimmerLocation;
   function shader(type, source) {
     const result = gl.createShader(type);
     gl.shaderSource(result,source);gl.compileShader(result);
@@ -98,6 +133,8 @@
     }
     rotationLocation = gl.getUniformLocation(program,'rotation');
     fitLocation = gl.getUniformLocation(program,'fit');
+    chargeLocation = gl.getUniformLocation(program,'charge');
+    shimmerLocation = gl.getUniformLocation(program,'shimmerTime');
     gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
     gl.clearColor(0,0,0,0);
     holder.classList.add('is-3d');
@@ -110,6 +147,7 @@
   let pointer = null, dragged = false, suppressClick = false, downX = 0, downY = 0;
   let previousX = 0, previousY = 0, previousAt = 0, previousFrame = 0;
   let frame = 0, visible = true, lost = false;
+  let activeDownloads = 0, charge = 0, shimmerTime = 0;
   const wrap = angle => Math.atan2(Math.sin(angle),Math.cos(angle));
   const clamp = (value,max) => Math.min(max,Math.max(-max,value));
   function draw() {
@@ -124,6 +162,9 @@
     // Yaw around the model, followed by camera-relative pitch.
     gl.uniformMatrix3fv(rotationLocation,false,new Float32Array([c,b*s,-a*s,0,a,b,s,-b*c,a*c]));
     gl.uniform2f(fitLocation,.355,.355*width/height);
+    gl.uniform1f(chargeLocation,charge);
+    gl.uniform1f(shimmerLocation,shimmerTime);
+    holder.style.setProperty('--brand-charge',charge.toFixed(3));
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES,0,vertices.length/9);
   }
@@ -132,6 +173,10 @@
     if (document.hidden || !visible || lost) {previousFrame=0;return;}
     const dt=previousFrame ? Math.min((now-previousFrame)/1000,.04) : 0;
     previousFrame=now;
+    const targetCharge = activeDownloads>0 ? 1 : 0;
+    charge += (targetCharge-charge)*(1-Math.exp(-dt*4.8));
+    if (Math.abs(targetCharge-charge)<.002) charge=targetCharge;
+    if (!motion.matches && charge>0) shimmerTime=(shimmerTime+dt)%(Math.PI*100);
     if (pointer===null) {
       const idle=motion.matches ? 0 : .6;
       yawSpeed += (idle-yawSpeed)*(1-Math.exp(-dt*1.2));
@@ -139,7 +184,7 @@
       yaw=wrap(yaw+yawSpeed*dt);pitch=wrap(pitch+pitchSpeed*dt);
     }
     draw();
-    if (!motion.matches || pointer!==null || Math.abs(yawSpeed)>.01 ||
+    if (!motion.matches || pointer!==null || Math.abs(targetCharge-charge)>.001 || Math.abs(yawSpeed)>.01 ||
         Math.abs(pitchSpeed)>.01 || Math.abs(wrap(pitch-neutralPitch))>.01) {
       frame=requestAnimationFrame(tick);
     } else previousFrame=0;
@@ -147,6 +192,13 @@
   function wake() {
     if (!frame && !document.hidden && visible && !lost) frame=requestAnimationFrame(tick);
   }
+  updateModel=count=>{
+    activeDownloads=count;
+    holder.classList.toggle('is-downloading',activeDownloads>0);
+    holder.title=activeDownloads>0 ? (activeDownloads===1?'Una descarga pendiente':activeDownloads+' descargas pendientes') : '';
+    wake();
+  };
+  updateModel(latestDownloads);
   function boost() {
     yawSpeed=clamp(Math.max(yawSpeed,0)+5.4,18);wake();
   }
@@ -154,15 +206,12 @@
     if (typeof navigate==='function') navigate('inicio');
     else location.hash='inicio';
   }
-  function isHome() {
-    return (typeof state==='object' ? state.page : location.hash.slice(1)||'inicio')==='inicio';
-  }
   canvas.addEventListener('pointerdown',event=>{
-    if (event.button!==0 || !event.isPrimary || !isHome()) return;
+    if (event.button!==0 || !event.isPrimary) return;
     pointer=event.pointerId;dragged=false;
     downX=previousX=event.clientX;downY=previousY=event.clientY;
     previousAt=event.timeStamp;canvas.setPointerCapture(pointer);
-    canvas.classList.add('is-dragging');wake();
+    canvas.classList.add('is-dragging');holder.classList.add('is-manipulating');wake();
   });
   canvas.addEventListener('pointermove',event=>{
     if (pointer!==event.pointerId) return;
@@ -182,7 +231,7 @@
     suppressClick=dragged;
     const held=Math.max(0,(event.timeStamp-previousAt)/1000);
     yawSpeed*=Math.exp(-held*5);pitchSpeed*=Math.exp(-held*5);
-    pointer=null;canvas.classList.remove('is-dragging');wake();
+    pointer=null;canvas.classList.remove('is-dragging');holder.classList.remove('is-manipulating');wake();
   }
   canvas.addEventListener('pointerup',release);
   canvas.addEventListener('pointercancel',release);
@@ -195,7 +244,7 @@
   canvas.addEventListener('keydown',event=>{
     if (event.key==='Enter' || event.key===' ') {
       event.preventDefault();boost();goHome();
-    } else if (isHome() && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
+    } else if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
       event.preventDefault();
       if (event.key==='ArrowLeft') yawSpeed-=3;
       if (event.key==='ArrowRight') yawSpeed+=3;

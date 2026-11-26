@@ -15,5 +15,29 @@
 .player-art-wrap{position:relative;flex:none}#player-info-action{width:19px;height:19px;right:-3px;bottom:-2px;font:bold 12px Georgia,serif;box-shadow:0 1px 6px #0007}
 .player-download-wrap{display:inline-flex;align-items:center;justify-content:center}
 #player-download{display:grid;place-items:center;width:34px;height:34px;padding:5px;background:transparent;border:1px solid var(--line);border-radius:9px;color:var(--text)}
-#player-download.downloaded{background:#153729;border-color:#2d674a;color:#8df0b5;opacity:1;pointer-events:none}
+#player-download.downloaded{background:#153729;border-color:#2d674a;color:#8df0b5;opacity:1}
+#player-download.download-pending{border-color:#7799bf;color:#b6d4f7}
+.download-view{display:flex;gap:6px;align-items:center;margin:0 0 16px}.download-view>span{margin-right:auto}
+.download-view button{padding:7px 12px;font-size:.81rem}.download-view button.active{color:#e6f0ff;background:#2b394b;border-color:#7897ba}
+.downloads-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:14px;align-items:start}
+.download-job{min-width:0}.download-job .job-head{gap:12px;align-items:center}
+.download-job-info{min-width:0;flex:1}.download-job .job-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.download-job-art{width:55px;height:55px;flex:none;overflow:hidden;border-radius:8px;display:grid;place-items:center}
+.download-job-formats{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px}
+.download-job-formats .format-chip{font-size:.65rem;padding:2px 5px}.download-job-formats .job-info{font-size:.7rem;margin:0}
+.download-job-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.download-job-actions button{font-size:.78rem;padding:7px 10px}
+.download-job .download-track{gap:9px;padding:12px 0 0;margin-top:12px}.download-job .download-track-info{min-width:0;flex-basis:150px}
+.download-job .download-track-info>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.download-job .track-actions{gap:6px}.download-job .track-actions button,.download-job .track-actions a{font-size:.74rem;padding:6px 8px}
+.download-job .download-track>.cover{width:40px;height:40px;overflow:hidden;display:grid;place-items:center}
+.download-warning{margin-top:9px;color:#d3bd8b}.tag-artist-hint{font-size:.73rem;color:var(--muted);line-height:1.4}
+.downloads-grid .download-job{padding:14px}.downloads-grid .job-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.downloads-grid .download-job-art{grid-column:1/-1;width:100%;height:auto;aspect-ratio:1;border-radius:10px}
+.downloads-grid .download-job-info{grid-column:1;min-width:0}.downloads-grid .status-tag{max-width:85px;font-size:.63rem;padding:4px;white-space:normal;text-align:center}
+.downloads-grid .download-job .download-track{align-items:start}.downloads-grid .download-track>.cover{display:none}
+.downloads-grid .track-actions{width:100%}.downloads-grid .download-track-info{flex-basis:100%}
+.quick-download-dialog{width:min(570px,94vw)}#quick-download-title{font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#quick-download-body{display:grid;gap:10px;margin-top:10px}#quick-download-body>.quiet{justify-self:end}
+#quick-download-body .section-copy .ux-spinner{margin-right:8px}#quick-download-body .job{padding:13px}
+@media(max-width:540px){.downloads-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.downloads-grid .download-job{padding:9px}.downloads-grid .job-head{grid-template-columns:minmax(0,1fr)}.downloads-grid .status-tag{grid-column:1;max-width:none;justify-self:start}.downloads-grid .download-job-formats>.job-info{font-size:.62rem}.downloads-grid .download-track .track-actions{display:grid;grid-template-columns:1fr}.downloads-grid .track-actions button,.downloads-grid .track-actions a{font-size:.67rem}.download-job>.job-head>.status-tag{font-size:.64rem}}
 @media(max-width:1000px){#download-notices{bottom:calc(110px + env(safe-area-inset-bottom))}body.has-player #download-notices{bottom:calc(240px + env(safe-area-inset-bottom))}}

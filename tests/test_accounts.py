@@ -310,6 +310,43 @@ class AccountsAPI(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(next(x for x in other.json()['providers'] if x['id'] == 'lastfm')['configured'])
 
 
+    async def test_discovery_history_is_private_and_settings_are_validated(self):
+        from recommendations import record_search
+        await self.add_friend()
+        store=self.module.registry.get(self.lid)
+        record_search(store,self.owner_info['user']['id'],'Synthwave')
+        root='/api/recommendations/'
+        endpoint=root+'history?library='+self.lid
+        mine=await self.owner.get(endpoint)
+        self.assertEqual(mine.status_code,200)
+        ident=mine.json()['items'][0]['id']
+        self.assertEqual((await self.friend.get(endpoint)).json()['items'],[])
+        self.assertEqual((await self.stranger.get(endpoint)).status_code,403)
+        await self.friend.delete(root+'history/'+ident+'?library='+self.lid,headers={'Content-Type':'application/json'})
+        self.assertEqual(len((await self.owner.get(endpoint)).json()['items']),1)
+        self.assertEqual((await self.owner.patch(root+'settings',json={'algorithm':'import os'})).status_code,400)
+        self.assertEqual((await self.owner.patch(root+'settings',json={'algorithm':'{"likes":12}'})).json()['weights']['likes'],12)
+        with patch.object(store.sources,'home',return_value={'sections':[],'checking':False}):
+            self.assertEqual((await self.owner.get(root+'home')).status_code,200)
+        deleted=await self.owner.delete(root+'history/'+ident+'?library='+self.lid,headers={'Content-Type':'application/json'})
+        self.assertEqual(deleted.status_code,200,deleted.text)
+        self.assertEqual((await self.owner.get(endpoint)).json()['items'],[])
+
+    async def test_local_playlist_import_keeps_library_permissions(self):
+        await self.add_friend()
+        store=self.module.registry.get(self.lid)
+        follow=self.module.following.add(store,'playlist','https://music.youtube.com/playlist?list=PLabcdefghijk1234',False)
+        endpoint='/api/listening/import?library='+self.lid
+        body={'follow_id':follow['id']}
+        self.assertEqual((await self.friend.post(endpoint,json=body)).status_code,403)
+        self.assertEqual((await self.stranger.post(endpoint,json=body)).status_code,403)
+        own=await self.owner.post(endpoint,json=body)
+        self.assertEqual(own.status_code,201,own.text)
+        self.assertTrue(own.json()['pending'])
+        wrong=await self.owner.post('/api/listening/import',json={'follow_id':'missing'})
+        self.assertEqual(wrong.status_code,400)
+
+
 class DurableApprovals(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

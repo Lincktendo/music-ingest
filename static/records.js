@@ -2,7 +2,7 @@
 const RecordCards={
   streamMode:true, request:0,
   reset(){
-    this.request++;this.streamMode=localStorage.getItem(this.modeKey())!=='download';this.paintMode();
+    this.request++;this.streamMode=localStorage.getItem(this.modeKey())!=='download';this.paintMode();window.RecordMenus?.close(false);
     for(const id of ['player-detail','large-art'])$(id).close();
   },
   modeKey(){return 'music-ingest:open:'+ (Profile.user?.id||'guest')+':'+(Profile.library?.id||'');},
@@ -23,13 +23,18 @@ const RecordCards={
       node.dataset.coverTip=caption;node.setAttribute('aria-label',caption);
       node.setAttribute('role','img');node.tabIndex=0;node.removeAttribute('title');
       node.addEventListener('click',open);
-      frame.append(node);
+      return node;
     };
+    const identity=el('span','record-identity');
+    // Different periods and phase offsets keep neighboring covers from blinking together.
+    let seed=2166136261;for(const ch of String(item.id))seed=Math.imul(seed^ch.charCodeAt(0),16777619)>>>0;
+    identity.style.setProperty('--identity-period',(12+(seed%6000)/1000)+'s');
+    identity.style.setProperty('--identity-phase',(-((seed>>>3)%12000)/1000)+'s');
     const kind=el('span','record-kind'+(type==='Rola de álbum'?' layered':''));
-    kind.append(actionIcon(item.type==='album'?'album':item.type==='artist'?'artist':'music'));badge(kind,type);
+    kind.append(actionIcon(item.type==='album'?'album':item.type==='artist'?'artist':'music'));identity.append(badge(kind,type));
     const name=Discovery.name(item.source),source=sourceMark(item.source,name);
-    source.classList.add('record-source');badge(source,name);
-    const saved=el('span','record-saved');saved.append(actionIcon('check'));badge(saved,'Ya está en la biblioteca');
+    source.classList.add('record-source');identity.append(badge(source,name));frame.append(identity);
+    const saved=el('span','record-saved');saved.append(actionIcon('check'));frame.append(badge(saved,'Ya está en la biblioteca'));
     saved.hidden=!(window.DownloadUI?.isSaved(item)??item.downloaded);
     card.append(frame);
     const title=this.button('record-title',item.title||'Sin título',open);title.title=title.textContent;card.append(title);
@@ -52,7 +57,7 @@ const RecordCards={
     }
     Selection.register(card,item);window.RecordUX?.selectOnHold(photo,item);
     window.ListeningCollection?.decorate(card,item);
-    if(item.type==='song')window.ListeningCollection?.trackMenu(card,item);
+    window.RecordMenus?.attach(card,item);
     return card;
   },
   async resolve(item){
@@ -66,7 +71,7 @@ const RecordCards={
     if(item.type==='artist')return this.artist(item,item.title);
     if(item.type==='album'||item.type==='playlist')return SourceUI.open(item);
     if(item.reference&&item.source==='qobuz')return Discovery.openReference(item,this.streamMode);
-    if(this.streamMode)return Player.stream(item);
+    if(this.streamMode)return item.fromFavorites?ListeningCollection.playFavorites(item):Player.stream(item);
     return this.save(item);
   },
   collection(kind,name,item){
@@ -145,14 +150,14 @@ const Player={
     // Start native playback within the tap, including Safari's first media gesture.
     // The same authenticated local URL prepares the audio and then serves byte ranges.
     if(!item.reference&&/^(?:[\w-]{11}|qb:\d{1,16}|ex:[a-f0-9]{32})$/.test(item.id||'')){
-      this.start(item,Profile.scope('/api/listen/'+encodeURIComponent(item.id)));return;
+      this.start(item,Profile.scope('/api/listen/'+encodeURIComponent(item.id)+'?native=1'));return;
     }
     const token=++this.sequence,rev=Profile.revision;
     try{
       const data=await RecordCards.resolve(item);
       if(token!==this.sequence||rev!==Profile.revision)return;
       const t=data.tracks?.[0];if(!t)throw Error('Esta pista no está disponible.');
-      this.start({...item,...t},Profile.scope('/api/listen/'+encodeURIComponent(t.id)));
+      this.start({...item,...t},Profile.scope('/api/listen/'+encodeURIComponent(t.id)+'?native=1'));
     }catch(e){if(token===this.sequence&&rev===Profile.revision)toast(e.message);}
   },
   start(item,url){
@@ -194,7 +199,7 @@ const Player={
 };
 window.Player=Player;
 $('player-cover').onclick=()=>Player.details();
-$('player-download').onclick=()=>{if(MediaUI.playing)RecordCards.save(MediaUI.playing);};
+$('player-download').onclick=()=>{if(MediaUI.playing)DownloadUI.quickQueue(MediaUI.playing);};
 $('detail-art').onclick=()=>{if(MediaUI.playing){$('large-image').replaceChildren(cover(MediaUI.playing.cover));$('large-art').showModal();}};
 for(const e of ['pause','playing'])$('music-audio').addEventListener(e,()=>{if($('player-detail').open)Player.details();});
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>$(b.dataset.close).close();

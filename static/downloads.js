@@ -1,16 +1,88 @@
 'use strict';
 const DownloadUI={
   saved:new Map(), watched:new Set(), foreground:null, poll:null, editing:null, latest:[],
+  quick:new Map(),quickView:null,view:'list',
   storeKey(){return 'mi-download-notices:'+Profile.user?.id+':'+Profile.library?.id;},
   reset(){
     clearInterval(this.poll);this.poll=null;this.foreground=null;this.editing=null;
-    this.saved.clear();this.latest=[];this.watched.clear();
+    this.saved.clear();this.latest=[];this.watched.clear();this.quick.clear();this.quickView=null;
+    $('quick-download-dialog')?.close();
+    try{this.view=localStorage.getItem('mi-download-view')==='grid'?'grid':'list';}catch{this.view='list';}
     $('download-notices').replaceChildren();$('failed-attempts').replaceChildren();$('failed-section').hidden=true;
     $('metadata-dialog').close();
     if(Profile.library){try{this.watched=new Set(JSON.parse(localStorage.getItem(this.storeKey())||'[]'));}catch{}}
   },
   persist(){try{localStorage.setItem(this.storeKey(),JSON.stringify([...this.watched].slice(-100)));}catch{}},
   trackJob(id){if(id){this.watched.add(id);this.persist();}},
+  itemKeys(t){return [...new Set([t?.id,t?.source_id,t?.youtube_id,t?.flac_id,t?.url].filter(Boolean))];},
+  pendingFor(t){for(const id of this.itemKeys(t)){const q=this.quick.get(id);if(q)return q;}return null;},
+  async quickQueue(item){
+    if(!item)return;
+    if(this.isSaved(item))return this.details(item);
+    const pending=this.pendingFor(item);
+    if(pending){this.openQuick(pending);return pending.promise;}
+    const rev=Profile.revision,task={item,jobs:[],status:'preparing',error:''};
+    for(const key of this.itemKeys(item))this.quick.set(key,task);
+    if(MediaUI.playing)this.playerState(MediaUI.playing);
+    task.promise=(async()=>{
+      try{
+        const data=await RecordCards.resolve(item);if(rev!==Profile.revision)return;
+        const tracks=data.tracks||[];if(!tracks.length)throw Error('No encontramos pistas disponibles para descargar.');
+        // Use the server's canonical ids and current format decision, even for pasted links.
+        for(let start=0;start<tracks.length;start+=50){
+          const batch=tracks.slice(start,start+50);
+          const result=await RecordCards.enqueue(batch);if(rev!==Profile.revision)return;
+          if(result.kind==='proposal'){
+            task.status='proposal';toast(result.status==='approved'?'Selección aprobada y en cola.':'Selección enviada al dueño de la biblioteca.');continue;
+          }
+          task.jobs.push(result.id);this.trackJob(result.id);task.status='queued';
+          for(const t of batch)for(const key of this.itemKeys(t))this.quick.set(key,task);
+        }
+        if(task.jobs.length)toast('En cola. Podés seguir escuchando.');
+        state.jobsKey='';await loadJobs();
+      }catch(e){
+        if(rev!==Profile.revision)return;
+        task.status='failed';task.error=e.message;toast(e.message);
+      }finally{
+        if(rev===Profile.revision){if(MediaUI.playing)this.playerState(MediaUI.playing);if(this.quickView===task)this.drawQuick();}
+      }
+    })();
+    return task.promise;
+  },
+  mountQuick(){
+    if($('quick-download-dialog'))return;
+    const dialog=el('dialog','quick-download-dialog');dialog.id='quick-download-dialog';
+    dialog.setAttribute('aria-labelledby','quick-download-title');dialog.setAttribute('closedby','any');
+    const top=el('div','dialog-top'),title=el('h2');title.id='quick-download-title';
+    const close=RecordCards.button('icon-button','×',()=>dialog.close());close.setAttribute('aria-label','Cerrar');top.append(title,close);
+    const body=el('div');body.id='quick-download-body';dialog.append(top,body);document.body.append(dialog);
+    let outside=false;const isOutside=event=>{const r=dialog.getBoundingClientRect();return event.target===dialog&&(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom);};
+    dialog.addEventListener('pointerdown',event=>{outside=isOutside(event);});
+    dialog.addEventListener('click',event=>{if(outside&&isOutside(event))dialog.close();outside=false;});
+    dialog.addEventListener('close',()=>{if(!dialog.open)this.quickView=null;});
+  },
+  openQuick(task){
+    this.mountQuick();this.quickView=task;this.drawQuick();
+    if(!$('quick-download-dialog').open)$('quick-download-dialog').showModal();
+  },
+  drawQuick(){
+    const task=this.quickView;if(!task)return;
+    $('quick-download-title').textContent=task.item.title||'Tu descarga';
+    const root=$('quick-download-body');root.replaceChildren();
+    const jobs=task.jobs.map(id=>this.latest.find(job=>job.id===id)).filter(Boolean);
+    if(!jobs.length){
+      const p=el('p','section-copy',task.error|| (task.status==='proposal'?'Selección enviada.':'Preparando la descarga…'));
+      if(task.status==='preparing')p.prepend(el('i','ux-spinner'));root.append(p);
+    }
+    for(const job of jobs)root.append(this.jobCard(job));
+    if(task.error){
+      const retry=RecordCards.button('quiet','Reintentar descarga',()=>{
+        for(const [key,value] of this.quick)if(value===task)this.quick.delete(key);
+        $('quick-download-dialog').close();this.quickQueue(task.item);
+      });root.append(retry);
+    }
+    root.append(RecordCards.button('quiet','Seguir escuchando',()=>$('quick-download-dialog').close()));
+  },
   isSaved(t){
     if(!t)return false;
     for(const id of [t.id,t.source_id,t.youtube_id,t.flac_id])if(this.saved.has(id))return this.saved.get(id);
@@ -26,11 +98,11 @@ const DownloadUI={
     }
   },
   playerState(t){
-    const saved=this.isSaved(t),b=$('player-download');
-    b.hidden=false;b.disabled=saved;b.classList.toggle('downloaded',saved);
-    b.setAttribute('aria-label',saved?'Ya está en la biblioteca':'Descargar');
+    const saved=this.isSaved(t),pending=this.pendingFor(t),b=$('player-download');
+    b.hidden=false;b.disabled=false;b.classList.toggle('downloaded',saved);b.classList.toggle('download-pending',!!pending&&!saved);
+    b.setAttribute('aria-label',saved?'Ya está en la biblioteca · Ver datos':pending?'Ver descarga':'Descargar en segundo plano');
     b.title=b.getAttribute('aria-label');b.parentElement.title=b.title;
-    b.replaceChildren(actionIcon(saved?'check':'download'));
+    b.replaceChildren(pending?.status==='preparing'&&!saved?el('i','ux-spinner'):actionIcon(saved?'check':'download'));
   },
   review(item){
     if(!item)return;
@@ -150,6 +222,7 @@ const DownloadUI={
         if(this.foreground!==job.id)this.notify(job);
       }
     }
+    if(this.quickView&&$('quick-download-dialog')?.open)this.drawQuick();
   },
   notify(job){
     const succeeded=job.status==='completed',note=el('div','download-notice');
@@ -164,6 +237,79 @@ const DownloadUI={
     note.append(open,close);const tray=$('download-notices');tray.prepend(note);
     while(tray.children.length>3)tray.lastElementChild.remove();
     setTimeout(()=>note.remove(),succeeded?15000:30000);
+  },
+  mountView(){
+    if($('download-view'))return;
+    try{this.view=localStorage.getItem('mi-download-view')==='grid'?'grid':'list';}catch{}
+    const tools=el('div','download-view');tools.id='download-view';tools.setAttribute('role','group');tools.setAttribute('aria-label','Vista de descargas');
+    tools.append(el('span','section-copy','Ver como'));
+    for(const [value,label] of [['list','Lista'],['grid','Cuadrícula']]){
+      const b=RecordCards.button('quiet',label,()=>{
+        this.view=value;try{localStorage.setItem('mi-download-view',value);}catch{}
+        this.renderJobs(this.latest);
+      });b.dataset.downloadView=value;tools.append(b);
+    }
+    $('jobs-status').before(tools);
+    const hint=el('small','tag-artist-hint','Varios artistas: separalos con punto y coma (;).');
+    hint.id='tag-artist-hint';$('tag-artist').after(hint);$('tag-artist').setAttribute('aria-describedby',hint.id);
+  },
+  renderJobs(items){
+    this.mountView();
+    for(const button of $('download-view').querySelectorAll('[data-download-view]')){
+      const active=button.dataset.downloadView===this.view;button.setAttribute('aria-pressed',String(active));button.classList.toggle('active',active);
+    }
+    const root=$('jobs'),failed=$('failed-attempts');root.replaceChildren();failed.replaceChildren();
+    root.classList.toggle('downloads-grid',this.view==='grid');failed.classList.toggle('downloads-grid',this.view==='grid');
+    const failures=items.filter(job=>['failed','interrupted'].includes(job.status));$('failed-section').hidden=!failures.length;
+    for(const job of items)(['failed','interrupted'].includes(job.status)?failed:root).append(this.jobCard(job));
+    if(!root.children.length)empty(root,failures.length?'No hay descargas activas':'Tu cola está tranquila',
+      failures.length?'Podés reintentar las descargas pendientes más abajo.':'Cuando descargués música, vas a ver su progreso acá.');
+  },
+  jobCard(job){
+    const box=el('article','job download-job');box.dataset.jobId=job.id;
+    const head=el('div','job-head'),info=el('div','download-job-info'),art=cover(job.files?.[0]?.cover||job.cover);
+    art.classList.add('download-job-art');head.append(art);
+    info.append(el('h3','job-title',job.title||'Selección de música'));
+    const by=el('p','job-info',job.artist||'');if(job.artist)info.append(by);
+    let stamp='';if(job.created_at){const date=new Date(typeof job.created_at==='number'?job.created_at*1000:job.created_at);
+      if(!Number.isNaN(date.valueOf()))stamp=date.toLocaleString('es',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
+    const badges=el('div','download-job-formats');
+    for(const fmt of job.formats||[]){const chip=el('small','format-chip',String(fmt).toUpperCase());chip.dataset.format=String(fmt).toLowerCase();chip.dataset.on='true';badges.append(chip);}
+    if(stamp)badges.append(el('small','job-info',stamp));info.append(badges);
+    const failed=['failed','interrupted'].includes(job.status),running=['queued','running'].includes(job.status);
+    const statusText={queued:'En cola',running:'Descargando',completed:'Completada',failed:'No se pudo completar',interrupted:'Interrumpida'}[job.status]||'Procesando';
+    head.append(info,el('span','status-tag'+(failed?' bad':''),statusText));box.append(head);
+    if(running){
+      const meter=el('progress','progress');meter.max=100;meter.value=Math.max(0,Math.min(100,Number(job.progress)||0));
+      meter.setAttribute('aria-label','Progreso de '+(job.title||'descarga'));
+      box.append(meter,el('p','job-info',job.status==='queued'?'Esperando su turno…':Math.round(meter.value)+' % completado'));
+    }
+    if(job.error)box.append(el('p','job-error',job.error));
+    if(job.warnings?.length){const warn=el('p','job-info download-warning','Audio guardado. Algunos datos, la portada o la letra no se pudieron completar.');box.append(warn);}
+    if(failed&&Profile.owner()){
+      const actions=el('div','download-job-actions');
+      const retry=RecordCards.button('quiet','Reintentar pendientes',async()=>{
+        retry.disabled=true;const rev=Profile.revision;
+        try{await post('/api/jobs/'+encodeURIComponent(job.id)+'/retry');if(rev!==Profile.revision)return;
+          this.trackJob(job.id);state.jobsKey='';await loadJobs();toast('El trabajo vuelve a la cola.');
+        }catch(e){if(rev===Profile.revision){retry.disabled=false;toast(e.message);}}
+      });
+      const remove=RecordCards.button('quiet danger-action','Quitar intento',()=>this.removeAttempt(job,remove));
+      actions.append(retry,remove);box.append(actions);
+    }
+    if(job.files?.length){
+      const files=el('div','file-links');
+      for(const file of job.files){
+        const row=el('div','download-track'),info=el('div','download-track-info');
+        const title=el('strong','',file.title||file.name),by=el('small','',[file.artist,file.album].filter(Boolean).join(' · '));
+        title.title=title.textContent;by.title=by.textContent;info.append(title,by);
+        const controls=MediaUI.controls(file);
+        controls.append(MediaUI.button(Profile.owner()?'Editar datos':'Ver datos','music',()=>this.details(file)));
+        row.append(cover(file.cover),info,controls);files.append(row);
+      }
+      box.append(files);
+    }
+    return box;
   },
   async removeAttempt(job,button){
     if(!Profile.owner())return;button.disabled=true;const rev=Profile.revision;

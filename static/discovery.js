@@ -12,7 +12,7 @@ function sourceMark(key, name, showName = false) {
   graphic.setAttribute('aria-hidden', 'true');
   graphic.setAttribute('focusable', 'false');
   const use = document.createElementNS(NS, 'use');
-  use.setAttribute('href', '/static/brand/platforms.svg#' + (platformSymbols.get(key) || 'website'));
+  use.setAttribute('href', '/static/brand/platforms.svg?v=0120#' + (platformSymbols.get(key) || 'website'));
   graphic.append(use);
   mark.append(graphic, el('span', showName ? '' : 'sr-only', name));
   if (!showName) mark.title = name;
@@ -123,7 +123,7 @@ const Discovery={
     }
     if(!items.length){
       const empty=el('div','home-empty'),text=el('p','',filter==='all'||filter==='group'?'Escuchá una rola, descargala o agregá una fuente para recibir recomendaciones.':'Todavía no hay recomendaciones de '+this.name(filter)+'. Importá su página o descargá una pista.');
-      const b=el('button','text-action','Ver fuentes ↓');b.type='button';b.onclick=()=>$('sources-heading').scrollIntoView({block:'center'});empty.append(text,b);root.append(empty);return;
+      const b=el('button','text-action','Ir a Fuentes →');b.type='button';b.onclick=()=>navigate('fuentes');empty.append(text,b);root.append(empty);return;
     }
     if(filter==='all'||filter==='group'){
       const pools=new Map();
@@ -147,14 +147,25 @@ const Discovery={
     while(regular.length||picks.length){items.push(...picks.splice(0,1),...regular.splice(0,3));}
     const groups=new Map();
     for(const item of items){
-      const key=filter==='group'?item.source:'all';if(!groups.has(key)){
-        const section=el('section','home-shelf');if(filter==='group'){
-          const heading=el('h3');heading.append(sourceMark(key,this.name(key),true));section.append(heading);
+      const kind=item.type==='album'?'album':item.type==='song'?'song':null;if(!kind)continue;
+      const key=(filter==='group'?item.source:'all')+'|'+kind;if(!groups.has(key)){
+        const section=el('section','home-shelf recommendation-shelf'),header=el('header','recommendation-heading');
+        const heading=el('h3','',kind==='album'?'Álbumes para descubrir':'Para escuchar ahora');
+        header.append(heading);
+        if(filter==='group')header.append(sourceMark(item.source,this.name(item.source),true));
+        const controls=el('div','shelf-controls'),grid=el('div','record-grid recommendation-row');
+        grid.setAttribute('role','list');grid.setAttribute('aria-label',heading.textContent);
+        for(const [direction,label] of [[-1,'Anteriores'],[1,'Siguientes']]){
+          const b=el('button','quiet',direction<0?'‹':'›');b.type='button';b.setAttribute('aria-label',label+' — '+heading.textContent);
+          b.onclick=()=>grid.scrollBy({left:direction*grid.clientWidth*.85,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+          controls.append(b);
         }
-        const grid=el('div','record-grid');section.append(grid);root.append(section);groups.set(key,grid);
+        header.append(controls);section.append(header,grid);root.append(section);groups.set(key,grid);
       }
-      groups.get(key).append(RecordCards.card(item));
+      const card=RecordCards.card(item);card.setAttribute('role','listitem');groups.get(key).append(card);
     }
+    // Stable shelf order regardless of whether the first recommendation was an album.
+    [...root.children].sort((a,b)=>Number(a.querySelector('.record-grid')?.getAttribute('aria-label').startsWith('Álbumes'))-Number(b.querySelector('.record-grid')?.getAttribute('aria-label').startsWith('Álbumes'))).forEach(n=>root.append(n));
   },
   async openReference(item,stream=false){
     if(item.source!=='qobuz')return openPreview({url:item.url});

@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -42,6 +43,24 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
     def audio(folder, *_):
         subprocess.run(['ffmpeg','-nostdin','-loglevel','error','-f','lavfi','-i',
                         'sine=frequency=440:duration=6',str(folder/'audio.mp3')], check=True)
+
+    async def test_native_prepare_is_private_scoped_and_fetches_no_audio(self):
+        from listening import NativeAudio
+        ticket=NativeAudio('https://r1.googlevideo.com/videoplayback?secret=keep-private',
+                           16000,6,'Fixture',time.time()+120)
+        params={**self.params,'native':'1'}
+        with patch('listening.native_info',return_value=ticket) as resolve, patch('listening.requests.Session') as upstream:
+            denied=await self.client.post(self.base+'/prepare',params={**params,'library':'foreign'})
+            self.assertEqual(denied.status_code,403)
+            self.assertEqual(resolve.call_count,0)
+            prepared=await self.client.post(self.base+'/prepare',params=params)
+            self.assertEqual(prepared.status_code,200,prepared.text)
+            self.assertNotIn('googlevideo',prepared.text)
+            self.assertNotIn('secret',prepared.text)
+            head=await self.client.head(prepared.json()['url'],headers={'range':'bytes=100-199'})
+            self.assertEqual((head.status_code,head.headers['Content-Range']),(206,'bytes 100-199/16000'))
+            self.assertEqual(resolve.call_count,1)
+            self.assertFalse(upstream.called)
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'ffmpeg needed')
     async def test_duration_ranges_stable_validator_and_library_scope(self):

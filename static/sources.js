@@ -69,7 +69,7 @@ $('source-help').addEventListener('close',()=>{
 });
 
 const SourceUI = {
-  epoch:0, read:0, busy:false, settings:null,
+  epoch:0, read:0, busy:false, sourcesLoading:false, settings:null,
   label(value) {
     return ({flac:'FLAC',mp3:'MP3',original:'Audio original',auto:'Automático'})[value] || (value||'').toUpperCase();
   },
@@ -117,9 +117,9 @@ const SourceUI = {
     }
   },
   reset() {
-    this.epoch++; this.read++; this.settings=null; this.busy=false;
+    this.epoch++; this.read++; this.settings=null; this.busy=false; this.sourcesLoading=false;
     $('home-sections').replaceChildren();
-    for (const id of ['home-status','source-status','youtube-state','qobuz-state','html-state']) $(id).textContent='';
+    for (const id of ['home-status','source-status','sources-loading','youtube-state','qobuz-state','html-state']) $(id).textContent='';
     for (const id of ['youtube-file','qobuz-file','html-file','qobuz-link']) $(id).value='';
     for (const id of ['youtube-clear','qobuz-clear','html-clear','qobuz-sync']) $(id).hidden=true;
     $('source-best').checked=true; $('source-best').disabled=true; $('qobuz-manual').open=false;
@@ -128,8 +128,8 @@ const SourceUI = {
   },
   local() { return ['localhost','127.0.0.1','[::1]'].includes(location.hostname); },
   lockControls(busy) {
-    this.busy=busy;
-    for (const item of document.querySelectorAll('#page-inicio input, #home-refresh, #page-inicio .source-box button:not(.help-dot)')) item.disabled=busy;
+    this.busy=busy; busy=busy||this.sourcesLoading;
+    for (const item of document.querySelectorAll('#page-fuentes input, #home-refresh, #page-fuentes .source-box button:not(.help-dot)')) item.disabled=busy;
     const allowed=this.local() && this.settings?.can_import_sessions===true;
     for(const id of ['youtube-file','qobuz-file','qobuz-link']) $(id).disabled=busy||!allowed;
     $('qobuz-link-form').querySelector('button').disabled=busy||!allowed;
@@ -148,9 +148,22 @@ const SourceUI = {
     $('qobuz-sync').hidden=!data.qobuz;
     $('html-clear').hidden=!data.html_count;
   },
+  async loadSources() {
+    if(!window.Profile?.owner())return;
+    const read=++this.read,epoch=this.epoch;
+    this.sourcesLoading=true;this.lockControls(this.busy);$('source-grid').setAttribute('aria-busy','true');status('sources-loading','Cargando tus fuentes…');
+    try{
+      const data=await api('/api/sources');
+      if(epoch!==this.epoch||read!==this.read)return;
+      this.showSettings(data);status('sources-loading','');
+    }catch(e){if(epoch===this.epoch&&read===this.read)status('sources-loading',e.message,true);}
+    finally{if(epoch===this.epoch&&read===this.read){this.sourcesLoading=false;$('source-grid').removeAttribute('aria-busy');this.lockControls(this.busy);}}
+  },
   async load(refresh=false) {
+    if(state.page==='fuentes')return this.loadSources();
     if (!window.Profile?.owner()) return;
     const read=++this.read, epoch=this.epoch;
+    this.sourcesLoading=false;this.lockControls(this.busy);$('source-grid').removeAttribute('aria-busy');
     if(!$('home-sections').childElementCount)window.RecordUX?.skeleton($('home-sections'));
     $('home-sections').setAttribute('aria-busy','true');
     status('home-status','Cargando tu Inicio…');
@@ -158,13 +171,13 @@ const SourceUI = {
       const settings=await api('/api/sources');
       if (epoch!==this.epoch||read!==this.read) return;
       this.showSettings(settings);
-      const data=await api('/api/home'+(refresh?'?refresh=true':''));
+      const data=await api('/api/recommendations/home'+(refresh?'?refresh=true':''));
       if (epoch!==this.epoch||read!==this.read) return;
       Discovery.favorites=data.favorite_artists||[];
-      this.render(data.sections);
+      this.render(data.sections);window.HomeRecommendations?.update(data);
       if(data.checking&&!data.sections.some(s=>s.items.length))window.RecordUX?.skeleton($('home-sections'),true);
       clearTimeout(this.verifyTimer);
-      if(data.checking)this.verifyTimer=setTimeout(()=>{if(epoch===this.epoch&&state.page==='inicio'&&!document.hidden&&!this.busy)this.load();},6000);
+      if(data.checking||data.genres?.checking)this.verifyTimer=setTimeout(()=>{if(epoch===this.epoch&&state.page==='inicio'&&!document.hidden&&!this.busy)this.load();},6000);
       status('home-status',data.warning||(data.checking?'Verificando audio oficial y portadas…':''),!!data.warning);
     } catch (error) {
       if (epoch===this.epoch&&read===this.read){
@@ -231,7 +244,7 @@ const SourceUI = {
         status('source-status','Sesión guardada. Buscando tus pistas…');
         return this.scan('');
       }
-      return 'Cookies guardadas. Revisá tus recomendaciones arriba.';
+      return 'Cookies guardadas. Revisá tus recomendaciones en Inicio.';
     });
   },
   async scan(link) {

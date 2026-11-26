@@ -6,29 +6,228 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import threading
-from concurrent.futures import Future
-from urllib.parse import quote
+from concurrent.futures import Future, TimeoutError as FutureTimeout
+from urllib.parse import quote, urlsplit, parse_qs
+from typing import NamedTuple
 import time
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+import requests
 from PIL import Image
 from mutagen import File
 from mutagen.flac import Picture
 from mutagen.id3 import APIC
 from mutagen.mp4 import MP4Cover
 
-from core import UserError, VIDEO_ID
+from core import UserError, VIDEO_ID, classify_error
 from qobuz_store import QID
 from source_catalog import EXID
 from storage import music_path
 
 AUDITIONS = threading.BoundedSemaphore(3)
 COVER_PREFIX = '/api/covers/custom/'
+NATIVE_STREAMS = threading.BoundedSemaphore(8)
+MAX_AUDIO = 150 * 1024 * 1024
+
+
+class NoNativeAudio(Exception):
+    """Use the existing validated temporary-file player for this source."""
+
+
+class NativeAudio(NamedTuple):
+    url: str
+    size: int
+    duration: float
+    agent: str
+    expires: float
+
+
+def native_info(store, ident):
+    """Resolve only the browser-playable original. Signed URLs never leave this process."""
+    prepare_track(store, ident)
+    engine = store.extractor.command() if store.extractor else [sys.executable,'-I','-m','yt_dlp']
+    with store.sources.vault.youtube_file() as cookies:
+        args=engine+['--ignore-config','--no-cache-dir','--no-playlist','--no-warnings','--socket-timeout','10',
+                     '--retries','0','--js-runtimes','deno','--match-filter','!is_live & duration <= 3600',
+                     '-f','bestaudio[ext=m4a][protocol=https][vcodec=none][acodec^=mp4a]',
+                     '--print','%(url)s','--print','%(filesize)s','--print','%(duration)s',
+                     '--print','%(http_headers.User-Agent)s']
+        if cookies:
+            args+=['--cookies',cookies]
+        args+=['https://www.youtube.com/watch?v='+ident]
+        try:
+            result=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=45,check=False)
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            raise NoNativeAudio() from exc
+    if result.returncode:
+        message=classify_error(result.stderr[-4096:].decode('utf-8','replace'))
+        if '(429)' in message:
+            raise UserError(message)
+        raise NoNativeAudio()
+    try:
+        url,length,duration,agent=result.stdout.decode('utf-8').splitlines()
+        u=urlsplit(url)
+        if not (u.scheme=='https' and (u.hostname or '').endswith('.googlevideo.com') and u.port in (None,443)
+                and u.username is None and u.password is None and u.path=='/videoplayback' and len(url)<16000):
+            raise ValueError()
+        params=parse_qs(u.query,max_num_fields=180)
+        size=int(length if length.isdigit() else params['clen'][0])
+        duration=float(duration)
+        if not (0<size<=MAX_AUDIO and 0<duration<=3600 and agent.isascii() and agent.isprintable() and len(agent)<512):
+            raise ValueError()
+        now=time.time()
+        expires=min(now+900,float(params.get('expire',[now+900])[0])-10)
+        if expires<=now:
+            raise ValueError()
+        return NativeAudio(url,size,duration,agent,expires)
+    except (ValueError,OverflowError,KeyError):
+        raise NoNativeAudio() from None
+
+
+def native_ticket(store,ident):
+    if not VIDEO_ID.fullmatch(ident) or 'youtube' not in store.sources.index.active():
+        raise NoNativeAudio()
+    key=(ident,store.sources.option('youtube_revision'))
+    with store.lock:
+        if not hasattr(store,'native_info_cache'):
+            store.native_info_cache={}
+            store.native_info_pending={}
+        entry=store.native_info_cache.get(key)
+        if entry and time.time()<entry[0]:
+            if entry[1] is None:
+                raise NoNativeAudio()
+            return entry[1]
+        flight=store.native_info_pending.get(key)
+        if flight is None:
+            if not AUDITIONS.acquire(False):
+                raise UserError('Ya hay varias pistas preparándose. Volvé a intentar en un momento.')
+            flight=store.native_info_pending[key]=Future()
+            leader=True
+        else:
+            leader=False
+    if not leader:
+        try:
+            return flight.result(timeout=60)
+        except FutureTimeout:
+            raise UserError('La fuente está tardando en responder. Probá de nuevo en un momento.') from None
+    try:
+        resolved=native_info(store,ident)
+        with store.lock:
+            if len(store.native_info_cache)>=40:
+                store.native_info_cache.pop(next(iter(store.native_info_cache)))
+            store.native_info_cache[key]=(resolved.expires,resolved)
+        flight.set_result(resolved)
+        return resolved
+    except Exception as exc:
+        if isinstance(exc,NoNativeAudio):
+            with store.lock:
+                if len(store.native_info_cache)>=40:
+                    store.native_info_cache.pop(next(iter(store.native_info_cache)))
+                store.native_info_cache[key]=(time.time()+30,None)
+        flight.set_exception(exc)
+        raise
+    finally:
+        with store.lock:
+            store.native_info_pending.pop(key,None)
+        AUDITIONS.release()
+
+
+def media_range(value,size):
+    if not value:
+        return 0,size-1,200
+    match=re.fullmatch(r'bytes=(\d{0,12})-(\d{0,12})',value.strip(),re.I)
+    if match and any(match.groups()):
+        left,right=match.groups()
+        start=int(left) if left else max(0,size-int(right))
+        end=min(size-1,int(right)) if left and right else size-1
+        if start<=end and start<size:
+            return start,end,206
+    raise HTTPException(416,'Rango de audio inválido.',headers={'Content-Range':'bytes */'+str(size)})
+
+
+def native_response(ticket,ident,request):
+    etag='"'+hashlib.sha256(f'{ident}/{ticket.size}/{ticket.duration}'.encode()).hexdigest()+'"'
+    requested=request.headers.get('range') if request.headers.get('if-range',etag)==etag else None
+    start,end,code=media_range(requested,ticket.size)
+    headers={'Accept-Ranges':'bytes','Content-Length':str(end-start+1),'ETag':etag,'Cache-Control':'private, no-store'}
+    if code==206:
+        headers['Content-Range']=f'bytes {start}-{end}/{ticket.size}'
+    if request.method=='HEAD':
+        return Response(status_code=code,headers=headers,media_type='audio/mp4')
+    if not NATIVE_STREAMS.acquire(False):
+        raise HTTPException(429,'Hay varias escuchas activas. Probá de nuevo en un momento.')
+    session=requests.Session()
+    session.trust_env=False
+    active=None
+    closed=False
+
+    def close():
+        nonlocal closed
+        if not closed:
+            closed=True
+            if active is not None:
+                active.close()
+            session.close()
+            NATIVE_STREAMS.release()
+
+    def block(offset):
+        nonlocal active
+        stop=min(end,offset+2*1024*1024-1)
+        active=session.get(ticket.url,headers={'Range':f'bytes={offset}-{stop}','User-Agent':ticket.agent,
+                           'Accept-Encoding':'identity'},stream=True,timeout=(6,15),allow_redirects=False)
+        if active.status_code==429:
+            raise UserError(classify_error('HTTP 429'))
+        expected=f'bytes {offset}-{stop}/{ticket.size}'
+        exact=(active.status_code==206 and active.headers.get('Content-Range','').lower()==expected)
+        full=(active.status_code==200 and offset==0 and stop==ticket.size-1)
+        if not (exact or full) or active.headers.get('Content-Length')!=str(stop-offset+1):
+            raise NoNativeAudio()
+        return stop
+    try:
+        first_end=block(start)
+    except UserError:
+        close()
+        raise
+    except (requests.RequestException,NoNativeAudio) as exc:
+        close()
+        raise NoNativeAudio() from exc
+
+    def chunks():
+        cursor=start
+        stop=first_end
+        try:
+            while cursor<=end:
+                for chunk in active.iter_content(16*1024):
+                    if not chunk:
+                        continue
+                    cursor+=len(chunk)
+                    if cursor>stop+1:
+                        raise IOError('Respuesta de audio no válida.')
+                    yield chunk
+                active.close()
+                if cursor!=stop+1:
+                    raise IOError('Respuesta de audio incompleta.')
+                if cursor<=end:
+                    stop=block(cursor)
+        except (requests.RequestException,NoNativeAudio,UserError):
+            raise IOError('La fuente interrumpió la transmisión.') from None
+        finally:
+            close()
+
+    class AudioResponse(StreamingResponse):
+        async def __call__(self,scope,receive,send):
+            try:
+                await super().__call__(scope,receive,send)
+            finally:
+                close()
+    return AudioResponse(chunks(),status_code=code,media_type='audio/mp4',headers=headers)
 
 
 def validate_track(key):
@@ -222,6 +421,30 @@ def listen(store, ident):
 
 
 def install_listening(app,access,registry):
+    def failure(store,ident,message):
+        with store.lock:
+            if len(store.audition_errors)>=128:
+                store.audition_errors.pop(next(iter(store.audition_errors)))
+            store.audition_errors[ident]=(time.monotonic(),message)
+        return HTTPException(429 if '(429)' in message else 400,detail=message)
+
+    def try_native(store,ident):
+        try:
+            return native_ticket(store,ident)
+        except NoNativeAudio:
+            return None
+        except UserError as exc:
+            raise failure(store,ident,str(exc)) from None
+
+    def prefer_native(store,ident):
+        if not VIDEO_ID.fullmatch(ident) or stored_audio(store,ident):
+            return False
+        cached=audio_cache(store,ident,'mp3')
+        try:
+            return time.time()-cached.stat().st_atime>=86400
+        except FileNotFoundError:
+            return True
+
     def prepare(store, ident, lid):
         validate_track(ident)
         try:
@@ -238,11 +461,7 @@ def install_listening(app,access,registry):
             return path,url+'?library='+quote(lid,safe='')
         except Exception as error:
             message = str(error) if isinstance(error,UserError) else 'No se pudo preparar el audio. Probá de nuevo.'
-            with store.lock:
-                if len(store.audition_errors)>=128:
-                    store.audition_errors.pop(next(iter(store.audition_errors)))
-                store.audition_errors[ident] = (time.monotonic(), message)
-            raise HTTPException(429 if '(429)' in message else 400, detail=message) from None
+            raise failure(store,ident,message) from None
 
     @app.get('/api/listen/{ident}/status')
     def audition_status(ident:str,request:Request,library:str|None=None):
@@ -254,16 +473,39 @@ def install_listening(app,access,registry):
         return {'error':detail if time.monotonic()-at < 300 else ''}
 
     @app.post('/api/listen/{ident}/prepare')
-    def audition_details(ident:str,request:Request,library:str|None=None):
+    def audition_details(ident:str,request:Request,library:str|None=None,native:bool=False):
         _,lib=access(request,library)
-        path,url=prepare(registry.get(lib['id']),ident,lib['id'])
+        validate_track(ident)
+        store=registry.get(lib['id'])
+        if native and prefer_native(store,ident):
+            ticket=try_native(store,ident)
+            if ticket:
+                url='/api/listen/'+ident+'?native=1&library='+quote(lib['id'],safe='')
+                return {'url':url,'duration':ticket.duration}
+        path,url=prepare(store,ident,lib['id'])
         audio=File(path)
         return {'url':url,'duration':audio.info.length if audio is not None and audio.info is not None else None}
 
     @app.api_route('/api/listen/{ident}',methods=['GET','HEAD'])
-    def audition(ident:str,request:Request,library:str|None=None):
+    def audition(ident:str,request:Request,library:str|None=None,native:bool=False):
         _,lib=access(request,library)
-        _,url=prepare(registry.get(lib['id']),ident,lib['id'])
+        validate_track(ident)
+        store=registry.get(lib['id'])
+        if native and prefer_native(store,ident):
+            ticket=try_native(store,ident)
+            if ticket:
+                try:
+                    response=native_response(ticket,ident,request)
+                    with store.lock:
+                        store.audition_errors.pop(ident,None)
+                    return response
+                except UserError as exc:
+                    raise failure(store,ident,str(exc)) from None
+                except NoNativeAudio:
+                    revision=store.sources.option('youtube_revision')
+                    with store.lock:
+                        store.native_info_cache[(ident,revision)]=(time.time()+30,None)
+        _,url=prepare(store,ident,lib['id'])
         return RedirectResponse(url,status_code=307)
 
     @app.api_route('/api/listen/{ident}/audio/{fmt}',methods=['GET','HEAD'])

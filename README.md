@@ -1,18 +1,20 @@
 # Music Ingest
 
-**Vos y tu música.** Una app para buscar canciones, organizar descargas y mantener tu biblioteca al día, desde el navegador de tu computadora o celular.
+**Vos y tu música.** Un reproductor para escuchar, descubrir música y mantener tu biblioteca al día. Con yt-dlp como motor de descargas, desde el navegador de tu computadora o celular.
 
-Versión **0.11.0** · [Guía rápida](docs/GUIA-RAPIDA.md) · [Integraciones y acceso para IA](INTEGRATIONS.md) · [Instalar solo o con Navidrome y activar la rotación](docs/NAVIDROME-Y-ROTACION.md)
+Versión **0.12.0** · [Guía rápida](docs/GUIA-RAPIDA.md) · [Integraciones y acceso para IA](INTEGRATIONS.md) · [Instalar solo o con Navidrome y activar la rotación](docs/NAVIDROME-Y-ROTACION.md)
 
 ## Qué podés hacer
 
 - Buscar desde la barra superior en cualquier pantalla o pegar un enlace de audio o video. YouTube Music (Google) viene activo. En Ajustes elegís qué fuentes participan en los resultados.
 - Marcar varias canciones y tocar **Descargar todo**, o elegir pistas de un álbum.
-- Importar una playlist una vez o descargar también las canciones que se agreguen después.
+- Importar una playlist una vez o descargar las novedades automáticamente; podés agregarla también a tus playlists locales para escucharla.
 - Seguir artistas: solo novedades o también su catálogo actual, con un check.
 - Ver el formato antes de descargar. La preferencia inicial elige FLAC cuando la pista está disponible sin pérdida. YouTube Music se guarda en MP3. En los enlaces adicionales se inspecciona el audio antes de ofrecer un formato de salida.
 - Descubrir canciones de los artistas que escuchaste o descargaste. Cada fuente acepta su HTML y sus cookies. Podés mezclar o agrupar recomendaciones y sumar otras plataformas en **+ Agregar fuente**.
-- Escuchar en Stream, guardar favoritas, armar playlists y ordenar la cola con mouse o dedo. Auto DJ prepara la siguiente canción y permite elegir cómo continuar.
+- Escuchar en Stream mientras navegás, guardar favoritas y armar playlists. La cola se despliega sobre el player; podés reordenarla y Auto DJ prepara la próxima rola.
+- Explorar Inicio con canciones y álbumes separados. Tus búsquedas, escuchas y favoritas alimentan recomendaciones; si conectás Navidrome, aparecen sus géneros.
+- Descargar desde los tres puntos o el player en segundo plano. Ver descargas en lista o cuadrícula y corregir metadatos ahí mismo.
 - Programar tandas de hasta veinte canciones. La rotación opcional se conecta con Navidrome y conserva sus favoritas al renovar los lotes automáticos.
 - Escuchar lo descargado, buscar en tu biblioteca por artista y álbum y eliminar canciones con confirmación.
 - Elegir una carpeta dentro del almacenamiento de música del servidor.
@@ -35,7 +37,7 @@ docker compose up -d
 4. Abrí **http://localhost:8511** y creá tu usuario y contraseña.
 5. Buscá una canción y revisá sus datos antes de descargarla.
 
-La imagen se descarga de `ghcr.io/lincktendo/music-ingest:0.11.0`. La instalación empieza vacía: no incluye cuentas, contraseñas, claves de proveedores, cookies, música ni datos del autor.
+La imagen se descarga de `ghcr.io/lincktendo/music-ingest:0.12.0`. La instalación empieza vacía: no incluye cuentas, contraseñas, claves de proveedores, cookies, música ni datos del autor.
 
 Docker crea dos volúmenes persistentes: `data` para la configuración y `music` para las canciones. Sus nombres efectivos llevan el prefijo del proyecto Compose. No hace falta preparar permisos manualmente para estos volúmenes nuevos. En **Ajustes → Carpeta de salida** elegís una subcarpeta de ese almacenamiento; no es una carpeta del teléfono.
 

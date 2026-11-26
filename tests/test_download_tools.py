@@ -36,12 +36,14 @@ class FileTagEdits(unittest.TestCase):
                     with store.db() as db:
                         db.execute('INSERT INTO files VALUES(?,?,?,?,?)',
                                    (metadata['id'],fmt,path.name,json.dumps(metadata),'job'))
-                    changes = Tags(title='Nuevo',artist='Mi artista',album='Mi disco',track=2)
+                    changes = Tags(title='Nuevo',artist='Mi artista; Invitada',album='Mi disco',track=2)
                     saved = edit_tags(store,metadata['id'],fmt,changes)
                     self.assertEqual(saved['tag_revision'],1)
-                    self.assertEqual(saved['artist'],'Mi artista')
+                    self.assertEqual(saved['artist'],'Mi artista; Invitada')
                     reread = File(path)
+                    self.assertEqual(str(reread['TPE1']) if fmt=='mp3' else reread['artist'][0],'Mi artista; Invitada')
                     self.assertEqual(str(reread['TIT2']) if fmt=='mp3' else reread['title'][0],'Nuevo')
+                    self.assertEqual(str(reread['TPE1']) if fmt=='mp3' else reread['artist'][0],'Mi artista; Invitada')
                     self.assertEqual(reread.tags.getall('USLT')[0].text if fmt=='mp3' else reread['lyrics'][0],'letra')
                     self.assertEqual(store.saved_ids(['BaW_jenozKc']),{'qb:12345','BaW_jenozKc'})
                     with self.assertRaises(UserError):

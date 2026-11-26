@@ -1,0 +1,33 @@
+/* Keep the cover quiet: one actions button, one alternating identity badge. */
+.record-picture .record-menu{position:absolute;inset:7px 7px auto auto;display:grid;place-items:center;width:31px;height:31px;padding:4px;background:#10141ce6;border:0;border-radius:9px;color:#f0f4fa;opacity:1;z-index:4;cursor:pointer}
+.record-menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+.record-menu:hover,.record-menu[aria-expanded=true]{background:#303a49}
+.record-card .record-heart{display:none}
+.record-card .record-check,.record-card .record-check:hover,.record-card .record-check:focus-visible{display:none}
+.selecting-records .record-card .record-check{display:grid;opacity:1;z-index:4}
+.record-picture .record-identity{position:absolute;inset:auto auto 7px 7px;width:27px;height:27px;z-index:2}
+.record-identity .record-kind,.record-identity .record-source{inset:0;opacity:1;animation:record-kind-cycle var(--identity-period,15s) var(--identity-phase,0s) infinite ease-in-out}
+.record-identity .record-source{animation-name:record-source-cycle;opacity:0;visibility:hidden}
+.record-identity [data-cover-tip]::after{inset:auto auto calc(100% + 5px) 0}
+.record-identity:hover .record-kind,.record-identity:hover .record-source,.record-identity:focus-within .record-kind,.record-identity:focus-within .record-source{animation-play-state:paused}
+.record-picture .record-saved{inset:auto 8px 8px auto;width:14px;height:14px;background:#2e654b;color:#c6f8db;box-shadow:0 1px 4px #0005;border-radius:50%;pointer-events:auto}
+.record-picture .record-saved svg{width:11px;height:11px}
+@keyframes record-kind-cycle{0%,43%,100%{opacity:1;visibility:visible}48%,94%{opacity:0;visibility:hidden}}
+@keyframes record-source-cycle{0%,43%,100%{opacity:0;visibility:hidden}48%,94%{opacity:1;visibility:visible}}
+.record-context-menu{position:fixed;inset:auto;margin:0;padding:6px;width:min(265px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow:auto;z-index:50;border:1px solid #35404e;border-radius:12px;background:#171c23;color:var(--text);box-shadow:0 12px 38px #0009}
+.record-context-menu::backdrop{background:transparent;backdrop-filter:none}
+.record-menu-action{width:100%;min-height:39px;display:flex;gap:11px;align-items:center;padding:8px 10px;text-align:left;border:0;border-radius:7px;background:transparent;color:inherit;font-family:inherit;font-size:.82rem;line-height:1.3;font-weight:500;cursor:pointer}
+.record-menu-action span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.record-menu-action svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.record-menu-action:hover,.record-menu-action:focus-visible{background:#293444;outline:none}
+.record-menu-action.is-active{color:#ffa3b9}.record-menu-action.is-active svg{fill:currentColor}
+.record-menu-action:disabled{opacity:.45;cursor:default}
+.record-menu-separator{border:0;border-top:1px solid #313b48;margin:5px 4px}
+.menu-hint{padding:7px 10px;font-size:.79rem;line-height:1.45;color:var(--muted)}
+.record-menu-form{display:grid;gap:10px;padding:8px}.record-menu-form label{display:grid;gap:5px;font-size:.8rem}
+.record-menu-form input{width:100%;min-width:0;background:#0d1219;color:var(--text);border:1px solid #48576a;border-radius:7px;padding:9px}
+.record-menu-form button{padding:9px;font-size:.8rem}
+.listening-row>.record-menu{margin-left:auto;display:grid;place-items:center;width:30px;height:30px;background:transparent;color:var(--muted);border:0}
+@media(prefers-reduced-motion:reduce){.record-identity .record-kind,.record-identity .record-source{animation:none}.record-identity .record-kind{visibility:hidden;opacity:0}.record-identity .record-source{visibility:visible;opacity:1}}
+
+.record-identity .record-source svg{width:22px;height:22px}

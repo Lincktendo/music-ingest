@@ -72,16 +72,51 @@ test('prepares exactly the head with JSON, updates after reorder, and stop drops
   env.fetch=(url,options)=>new Promise(resolve=>requests.push({url,options,resolve}));
   c.dj.continuous=true;media.playing=songs[0];c.queue=songs.slice(1,6);
   c.warmNext();const first=fireWarm();assert.equal(requests.length,1);
-  assert.equal(requests[0].url,'/api/listen/'+songs[1].id+'/prepare');
+  assert.equal(requests[0].url,'/api/listen/'+songs[1].id+'/prepare?native=1');
   assert.equal(requests[0].options.headers['Content-Type'],'application/json');
   assert.equal(requests[0].options.body,'{}');
   c.move(2,0);c.warmNext();await fireWarm();assert.equal(requests.length,1);
   requests[0].resolve({ok:true,json:async()=>({url:'/api/listen/old/audio/mp3'})});await first;
   assert.equal(c.ready,undefined);
   const second=fireWarm();assert.equal(requests.length,2);
-  assert.equal(requests[1].url,'/api/listen/'+songs[3].id+'/prepare');
+  assert.equal(requests[1].url,'/api/listen/'+songs[3].id+'/prepare?native=1');
   c.stop();media.playing=null;
   assert.equal(requests[1].options.signal.aborted,true);
   requests[1].resolve({ok:true,json:async()=>({url:'/api/listen/old/audio/mp3'})});await second;
   assert.equal(c.queue.length,0);assert.equal(c.ready,null);assert.equal(requests.length,2);
+});
+
+test('playing a favorite starts the chosen track immediately then queues all other favorites newest first',async()=>{
+  const {c,env,events,calls}=setup();
+  const all=Array.from({length:123},(_,i)=>({id:'favorite_'+String(i).padStart(3,'0'),type:'song',title:'Favorite '+i}));
+  const offsets=[];
+  env.api=async path=>{
+    const offset=Number(new URL(path,'https://example.test').searchParams.get('offset'));
+    offsets.push(offset);return {items:all.slice(offset,offset+50),next_offset:offset+50<all.length?offset+50:null};
+  };
+  c.shuffle=c.dj.enabled=true;
+  const pending=c.playFavorites(all[64]);
+  assert.deepEqual(events,[all[64].id]);
+  await pending;
+  assert.deepEqual(offsets,[0,50,100]);
+  assert.deepEqual(Array.from(c.queue,t=>t.id),all.filter(t=>t!==all[64]).map(t=>t.id));
+  assert.equal(calls.some(v=>v.route.endsWith('/next')),false);
+  await c.playNext(songs[2]);await c.appendQueue(songs[3]);
+  assert.equal(c.queue.length,124);assert.equal(c.queue.at(-1).id,songs[3].id);
+  await c.next();assert.equal(events.at(-1),songs[2].id);
+});
+
+test('stop invalidates in-flight favorites pagination; manual tail stays after later pages',async()=>{
+  const {c,env}=setup();
+  let complete;
+  env.api=()=>new Promise(resolve=>{complete=resolve;});
+  const first=c.playFavorites(songs[1]);
+  await c.appendQueue(songs[15]);
+  complete({items:songs.slice(0,4),next_offset:4});await tick();
+  assert.deepEqual(Array.from(c.queue,t=>t.id),[songs[0].id,songs[2].id,songs[3].id,songs[15].id]);
+  complete({items:songs.slice(4,8),next_offset:null});await first;
+  assert.equal(c.queue.at(-1).id,songs[15].id);
+  const later=c.playFavorites(songs[9]);c.stop();
+  complete({items:songs,next_offset:null});await later;
+  assert.equal(c.queue.length,0);assert.equal(c.fixed,null);
 });
